@@ -1,0 +1,20 @@
+[
+ {
+  "file": "slot\\3d_render_style_xl.safetensors",
+  "family": "sdxl",
+  "trained": false,
+  "name": "3D render",
+  "trigger": "3d style, 3d render,",
+  "note": "",
+  "url": ""
+ },
+ {
+  "file": "zimage\\ZImage_3DRenderStyle_Redmond.safetensors",
+  "family": "zimage",
+  "trained": false,
+  "name": "3D render",
+  "trigger": "",
+  "note": "",
+  "url": ""
+ }
+]

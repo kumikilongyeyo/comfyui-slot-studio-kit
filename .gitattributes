@@ -1,0 +1,6 @@
+* text=auto eol=lf
+# Windows scripts are stored with CRLF as-is (also inside the GitHub zip)
+*.bat -text
+*.ps1 -text
+*.png binary
+*.mp4 binary

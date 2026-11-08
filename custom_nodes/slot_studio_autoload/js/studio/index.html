@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slot Studio</title>
+<style>
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --panel2:#f3f4f6; --line:#e3e5ea; --text:#17181c; --dim:#6b7080;
+  --accent:#2563eb; --accent2:#1d4ed8; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; --chip:#f1f2f5;
+  --soft:#eaf1ff; --media:#eceef2; --hover:#eef0f4; --r:12px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.4 "Segoe UI",system-ui,sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+.app{display:grid;grid-template-columns:400px 1fr;height:100vh}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.scroll{overflow-y:auto;padding:16px 16px 8px;flex:1}
+.brand{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.brand b{font-size:16px} .brand .sp{flex:1}
+.brand > a{color:var(--dim);text-decoration:none;font-size:12px;border:1px solid var(--line);padding:4px 8px;border-radius:8px}
+.nav{display:flex;background:var(--panel2);border-radius:9px;padding:3px}
+.nav a{color:var(--dim);text-decoration:none;font-size:12.5px;font-weight:600;padding:5px 12px;border-radius:7px}
+.nav a.on{background:var(--accent);color:#fff}
+.brand a:hover{color:var(--text)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--panel2);border-radius:10px;padding:4px;margin-bottom:16px}
+.tabs button{background:none;border:0;padding:8px;border-radius:8px;color:var(--dim);font-weight:600}
+.tabs button.on{background:var(--accent);color:#fff}
+.sec{margin-bottom:18px}
+.lbl{display:flex;align-items:center;justify-content:space-between;color:var(--dim);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.lbl small{text-transform:none;letter-spacing:0;font-weight:400}
+.models{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mcard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;text-align:left;min-height:58px}
+.mcard b{display:block;font-size:13px}
+.mcard span{color:var(--dim);font-size:11.5px}
+.mcard.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--soft)}
+.mcard.meh{opacity:.55}
+.mcard .tag{float:right;font-size:10px;background:#2b3a1f;color:#a3e635;padding:1px 6px;border-radius:6px}
+textarea{width:100%;min-height:110px;resize:vertical;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:10px;font:inherit}
+textarea:focus,input:focus{outline:1px solid var(--accent)}
+.row{display:flex;gap:8px;align-items:center}
+.ghost{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px}
+.ghost:hover{border-color:#c9ccd4}
+.ghost:disabled{opacity:.5;cursor:default}
+.slots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.slot{position:relative;aspect-ratio:1;background:var(--panel2);border:1.5px dashed #c9ccd4;border-radius:10px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--dim);font-size:12px;overflow:hidden;cursor:pointer}
+.slot.drag{border-color:var(--accent);background:var(--soft)}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--media)}
+.slot canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.slot .x{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:#000a;border:0;color:#fff;z-index:3}
+.slot .cap{position:absolute;left:6px;bottom:6px;background:#000b;color:#fff;padding:2px 7px;border-radius:6px;font-size:11px;z-index:3}
+.slot.painting{cursor:crosshair}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-size:12.5px}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .ar{display:inline-block;border:1.5px solid currentColor;border-radius:2px;margin-right:6px;vertical-align:-2px}
+.stepper{display:flex;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px}
+.stepper button{background:none;border:0;width:34px;height:32px;font-size:16px}
+.stepper span{min-width:26px;text-align:center;font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=number],input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:6px 8px;width:100%;font:inherit}
+details{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+details summary{cursor:pointer;color:var(--dim);font-weight:600;font-size:12.5px}
+.kv{display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--dim)}
+.hint{color:var(--dim);font-size:12px;margin-top:6px}
+.warnbox{background:#fff7e6;border:1px solid #f3d38a;color:#8a5a00;border-radius:8px;padding:7px 9px;font-size:12px;margin-top:8px}
+.foot{border-top:1px solid var(--line);padding:12px 16px;background:var(--panel)}
+.gen{width:100%;box-shadow:0 4px 12px #2563eb40;background:linear-gradient(180deg,var(--accent),var(--accent2));border:0;border-radius:10px;padding:12px;font-weight:700;font-size:15px;color:#fff}
+.gen:disabled{opacity:.6;cursor:default}
+.bar{height:4px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.status{color:var(--dim);font-size:12px;margin-top:6px;min-height:16px}
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.top{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.top h2{margin:0;font-size:15px}
+.top .sp{flex:1}
+.gallery{flex:1;overflow-y:auto;padding:16px 16px 90px;position:relative;user-select:none}
+.grid{display:flex;flex-wrap:wrap;gap:8px}
+.grid::after{content:'';flex-grow:999999}
+.card{position:relative;height:var(--th,220px);flex-grow:var(--ar,1);flex-basis:calc(var(--th,220px) * var(--ar,1));max-width:100%;border-radius:10px;overflow:hidden;background:var(--media)}
+.card img{display:block;width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.card .ck{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:6px;border:2px solid #fff;background:#0004;opacity:0;transition:opacity .12s;z-index:2;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;padding:0}
+.card:hover .ck,.gallery.selecting .ck{opacity:1}
+.card.sel .ck{background:var(--accent);border-color:var(--accent);opacity:1}
+.card.sel{outline:3px solid var(--accent);outline-offset:-3px}
+.card .acts{position:absolute;top:8px;right:8px;display:flex;gap:5px;opacity:0;transition:opacity .15s;z-index:2}
+.card:hover .acts{opacity:1}
+.gallery.selecting .card .acts{display:none}
+.card .acts button,.card .acts a{background:#ffffffe6;border:1px solid #0001;color:#17181c;border-radius:8px;padding:5px 8px;font-size:12px;text-decoration:none;box-shadow:0 1px 4px #0002}
+.card .meta{position:absolute;left:0;right:0;bottom:0;padding:18px 10px 7px;font-size:11.5px;color:#fff;background:linear-gradient(transparent,#000a);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:0;transition:opacity .15s;pointer-events:none}
+.card:hover .meta{opacity:1}
+.card.pending{display:flex;align-items:center;justify-content:center;color:var(--dim);border:1.5px dashed var(--line);background:var(--panel)}
+.marquee{position:absolute;border:1px solid var(--accent);background:#2563eb1f;pointer-events:none;z-index:5}
+.selbar{position:fixed;left:calc(50% + 200px);bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 8px;box-shadow:0 10px 30px #0002;z-index:30}
+.selbar .n{font-weight:600;font-size:13px;padding:0 6px}
+.selbar button{background:var(--chip);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12.5px}
+.selbar button.del{color:var(--bad)}
+.selbar button.x{background:none;border:0;font-size:16px;color:var(--dim)}
+.selhint{position:fixed;left:calc(50% + 200px);bottom:68px;transform:translateX(-50%);background:var(--soft);border:1px solid #c9d8fb;color:#1e3a8a;border-radius:10px;padding:6px 10px;font-size:12px;z-index:30;display:flex;gap:10px;align-items:center}
+.selhint button{background:none;border:0;color:#1e3a8a}
+.tsize{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px}
+.tsize input{width:110px}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:s 1s linear infinite;margin:0 auto 8px}
+@keyframes s{to{transform:rotate(360deg)}}
+.empty{grid-column:1/-1;text-align:center;color:var(--dim);padding:80px 20px}
+.empty b{display:block;color:var(--text);font-size:18px;margin-bottom:6px}
+.lightbox{position:fixed;inset:0;background:#0f1115e6;display:none;align-items:center;justify-content:center;z-index:50;padding:30px}
+.lightbox.on{display:flex}
+.lightbox img{max-width:100%;max-height:100%;border-radius:10px}
+.toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#fff1f1;border:1px solid #f3b4b4;color:#9b1c1c;box-shadow:0 6px 20px #0002;padding:10px 14px;border-radius:10px;display:none;z-index:60;max-width:70vw}
+.toast.ok{background:#ecfdf3;border-color:#a7e3bd;color:#166534}
+.hide{display:none!important}
+/* compact Freepik-style controls */
+.dd{width:100%;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left}
+.dd b{flex:1;font-size:14px} .dd small{color:var(--dim);font-size:12px} .dd .car{color:var(--dim)}
+.pop{position:relative}
+.menu{position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px;z-index:20;box-shadow:0 12px 30px #0002;max-height:420px;overflow:auto}
+.menu.up{top:auto;bottom:calc(100% + 6px)}
+.menu button{display:block;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:8px 10px}
+.menu button:hover,.menu button.on{background:var(--hover)}
+.menu button b{display:block;font-size:13px} .menu button span{color:var(--dim);font-size:12px}
+.menu .grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px 4px}
+.tiles{display:flex;gap:8px;flex-wrap:wrap}
+.tiles .slot{width:96px;height:96px;aspect-ratio:auto;font-size:11px;border-radius:10px}
+.tiles .slot .cap{font-size:10px}
+.pbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px}
+.pbox:focus-within{border-color:var(--accent)}
+.pbox textarea{border:0;background:none;min-height:96px;padding:4px}
+.pbox textarea:focus{outline:none}
+.pbar{display:flex;align-items:center;gap:8px;padding-top:6px}
+.avoid{margin-top:8px;display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px}
+.avoid input{flex:1}
+.brow{display:flex;gap:8px;align-items:center}
+.brow .chipbtn{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px}
+.brow .pop .menu{min-width:190px;right:auto}
+@media (max-width:900px){.app{grid-template-columns:1fr;height:auto}aside{border-right:0}.gallery{min-height:60vh}.selbar,.selhint{left:50%}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand"><b>Slot Studio</b><nav class="nav"><a class="on" href="index.html">Image</a><a href="video.html">Video</a></nav><span class="sp"></span><a href="/" target="_blank" title="Open the node graph">Node graph</a></div>
+  <div class="scroll">
+    <div class="tabs"><button id="tabCreate" class="on">Create</button><button id="tabEdit">Edit picture</button></div>
+
+    <div class="sec">
+      <div class="lbl">Model <small id="modelHint"></small></div>
+      <div class="pop"><button class="dd" id="modelBtn"><b id="modelName"></b><small id="modelDesc"></small><span class="car">▾</span></button>
+        <div class="menu hide" id="models"></div></div>
+    </div>
+
+    <div class="sec" id="secPics">
+      <div class="lbl">References <small>click, drag or paste (Ctrl+V)</small></div>
+      <div class="tiles">
+        <div class="slot" id="slot1"><div>＋<br>Picture 1<br><small>to edit</small></div></div>
+        <div class="slot" id="slot2"><div>＋<br>Picture 2<br><small>style / object</small></div></div>
+      </div>
+      <div class="row" style="margin-top:8px;flex-wrap:wrap">
+        <button class="ghost" id="paintBtn" disabled>Paint area to change</button>
+        <button class="ghost hide" id="clearMask">Clear paint</button>
+        <span class="hide" id="brushBox" style="flex:1;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim)">brush <input type="range" id="brush" min="8" max="160" value="50"></span>
+      </div>
+      <div class="hint" id="picHint">Paint = only that part changes, the rest stays pixel-exact. Picture 2 is used as soon as you add it: say how, e.g. "in the style of picture 2".</div>
+    </div>
+
+    <div class="sec">
+      <div class="lbl"><span id="promptLbl">Prompt</span></div>
+      <div class="pbox">
+        <textarea id="prompt" placeholder="Describe what you want..."></textarea>
+        <div class="pbar"><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt">✨ AI prompt</button><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
+      </div>
+      <div class="brow" style="margin-top:10px">
+        <div class="stepper" title="Number of images (1-12)"><button id="cMinus">−</button><span id="count">1</span><button id="cPlus">+</button></div>
+        <div class="pop" id="aspectPop"><button class="chipbtn" id="aspectBtn" title="Shape"></button><div class="menu hide" id="aspects"></div></div>
+        <div class="pop"><button class="chipbtn" id="sizeBtn" title="Size"></button><div class="menu hide" id="sizes"></div></div>
+      </div>
+      <div class="avoid"><span>Avoid</span><input type="text" id="neg" value="text, watermark, logo, blurry, lowres, deformed, extra limbs" title="Used by the SDXL models"></div>
+      <div class="warnbox hide" id="restyleWarn">This model can't follow edit instructions: it redraws your picture (restyle) at the strength set in Advanced. For edits use FLUX.2 Klein or Qwen Edit.</div>
+    </div>
+
+    <div class="sec hide" id="secCam">
+      <div class="lbl">Camera angle <label style="text-transform:none;font-weight:400"><input type="checkbox" id="camOn"> change angle</label></div>
+      <div class="chips" id="camPresets"></div>
+      <div class="kv" id="camSliders">
+        <span>Around (°)</span><input type="range" id="camH" min="0" max="359" value="90">
+        <span>Up / down (°)</span><input type="range" id="camV" min="-30" max="60" value="0">
+        <span>Zoom</span><input type="range" id="camZ" min="0" max="10" step="0.5" value="5">
+      </div>
+      <div class="hint" id="camText"></div>
+    </div>
+
+    <div class="sec">
+      <div class="lbl">Style <small id="styleHint"></small></div>
+      <div class="chips" id="styles"></div>
+      <div class="kv" id="styleStrengthRow"><span>Style strength</span><input type="range" id="styleStr" min="0.1" max="1.2" step="0.05" value="0.8"></div>
+    </div>
+
+    <details class="sec">
+      <summary>Advanced</summary>
+      <div class="kv">
+        <span>Edit strength</span><input type="range" id="strength" min="0.2" max="0.95" step="0.05" value="0.6">
+        <span>Seed</span><div class="row"><input type="number" id="seed" value="7"><label style="white-space:nowrap"><input type="checkbox" id="lockSeed"> lock</label></div>
+        <span>Edge (px)</span><input type="range" id="edge" min="0" max="40" value="8">
+      </div>
+    </details>
+  </div>
+  <div class="foot">
+    <button class="gen" id="gen">Generate</button>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="status" id="status">Ready.</div>
+  </div>
+</aside>
+
+<main>
+  <div class="top"><h2>Results</h2><small id="gcount" style="color:var(--dim)"></small><span class="sp"></span>
+    <label class="tsize" title="Thumbnail size">▫<input type="range" id="thumb" min="120" max="380" value="220">▣</label>
+    <button class="ghost" id="selAllTop">Select all</button></div>
+  <div class="gallery" id="gallery"><div class="grid" id="grid"></div></div>
+  <div class="selhint hide" id="selHint">Hold <b>Shift</b> or <b>drag a box</b> to select several · Ctrl+A all · Delete key removes<button id="hintX">✕</button></div>
+  <div class="selbar hide" id="selBar"><button class="x" id="selX" title="Clear selection">✕</button><span class="n" id="selN"></span>
+    <button id="selAll">Select all</button><button id="selDl">⬇ Download</button><button id="selEdit">✎ Edit</button><button class="del" id="selDel">🗑 Delete</button></div>
+</main>
+</div>
+<div class="lightbox" id="lightbox"><img id="lbImg" alt=""></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ------------------------------------------------------------------ config
+// Node ids of the panel in workflow 16_IMAGE_All_In_One (image_api.json is its API export).
+const N = {model:'2', task:'3', p1:'4', p2:'5', use2:'6', prompt:'7', neg:'8', precise:'9', edge:'10', useCam:'11', cam:'12',
+           res:'13', editMp:'14', how:'15', strength:'16', loraZ:'17', loraK:'18', loraQ:'19', loraS:'20', save:'21', ckpt:'100', q21full:'112'};
+const SEED_NODES = ['41','45','90','98','104','106','110'], NOISE_NODES = ['56','72','123'];
+const MODEL_OPTS = ['Z-Image Turbo  (best from text)','FLUX.2 Klein  (fast edits + style ref)','Qwen Edit 2511  (precise edits + camera angles)','SDXL  (old LoRA styles)','Qwen-Image 2.1  (smartest, NON-COMMERCIAL)'];
+const TASK_OPTS = ['New image from text','Edit my picture (PICTURE 1)'];
+
+const MODELS = [
+  // Qwen-Image 2.1 (2026-11-05): default. Weights are Qwen Research Licence = NON-COMMERCIAL (tests/concepts only).
+  {id:'qwen21', name:'Qwen-Image 2.1 Turbo', desc:'Smartest: follows long prompts, text, edits · non-commercial', idx:4, family:'qwen21', edit:'edit', best:'create', need:'qwen_image_2.1_turbo_int8_convrot.safetensors'},
+  {id:'qwen21full', name:'Qwen-Image 2.1 Full', desc:'Best quality, ~3x slower · non-commercial', idx:4, family:'qwen21', edit:'edit', full:true, need:'qwen_image_2.1_int8_convrot.safetensors'},
+  {id:'zimage', name:'Z-Image Turbo', desc:'Best looking from text (commercial-safe)', idx:0, family:'zimage', edit:'restyle'},
+  {id:'klein', name:'FLUX.2 Klein', desc:'Fast edits like ChatGPT, style from picture 2', idx:1, family:'klein', edit:'edit', best:'edit'},
+  {id:'qwen', name:'Qwen Edit 2511', desc:'Most precise edits + camera angles', idx:2, family:'qwen', edit:'edit'},
+  {id:'sdxl', name:'SDXL Base', desc:'Old LoRA styles', idx:3, family:'sdxl', edit:'restyle', ckpt:'sd_xl_base_1.0.safetensors',
+   s:{steps:28, cfg:5.5, sampler:'dpmpp_2m', sched:'karras', steps2:20}},
+  {id:'dreamshaper', name:'DreamShaper XL Turbo', desc:'Stylized fantasy, fast (SDXL)', idx:3, family:'sdxl', edit:'restyle', ckpt:'DreamShaperXL_Turbo_v2_1.safetensors',
+   s:{steps:8, cfg:2, sampler:'dpmpp_sde', sched:'karras', steps2:6}},
+  {id:'juggernaut', name:'Juggernaut XL', desc:'Realistic, cinematic (SDXL)', idx:3, family:'sdxl', edit:'restyle', ckpt:'Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors',
+   s:{steps:30, cfg:4.5, sampler:'dpmpp_2m', sched:'karras', steps2:20}},
+  {id:'realvis', name:'RealVisXL', desc:'Photo-real props, jewelry (SDXL)', idx:3, family:'sdxl', edit:'restyle', ckpt:'RealVisXL_V5.0_fp16.safetensors',
+   s:{steps:30, cfg:5, sampler:'dpmpp_2m', sched:'karras', steps2:20}},
+];
+const STYLES = {
+  zimage:[{n:'None'},{n:'3D render',f:'zimage\\ZImage_3DRenderStyle_Redmond.safetensors',s:0.8},{n:'Game icon',f:'zimage\\ZImage_Icons_Redmond.safetensors',s:0.8,t:'Game icon.'}],
+  sdxl:[{n:'None'},{n:'3D render',f:'slot\\3d_render_style_xl.safetensors',s:0.8,t:'3d style, 3d render,'},
+        {n:'Icons',f:'slot\\IconsRedmondV2-Icons.safetensors',s:0.8,t:'icredm,'},
+        {n:'Glossy icons (Smartisan)',f:'slot\\sdxl_SmartisanStyle_v1.safetensors',s:0.8,t:'icon, skeuomorphic 3d style, <smartisan-icon>,',lic:1},
+        {n:'Painterly (Arcadia)',f:'slot\\arcadiastyle-06.safetensors',s:0.85,t:'arcadiastyle,',lic:1}],
+  klein:[{n:'None'}], qwen:[{n:'None'}], qwen21:[{n:'None'}],
+};
+const ASPECTS = [['1:1','1:1 (Square)',1,1],['3:4','3:4 (Portrait Standard)',3,4],['4:3','4:3 (Standard)',4,3],['2:3','2:3 (Portrait Photo)',2,3],
+                 ['3:2','3:2 (Photo)',3,2],['9:16','9:16 (Portrait Widescreen)',9,16],['16:9','16:9 (Widescreen)',16,9],['21:9','21:9 (Ultrawide)',21,9]];
+const SIZES = [['1K',1.0,'~1024 px, fastest'],['1.5K',2.25,'~1536 px'],['2K',4.0,'~2048 px, slow']];
+const CAMS = [['Front',0,0],['¾ right',45,0],['Right',90,0],['Back',180,0],['Left',270,0],['¾ left',315,0],['From above',30,45],['From below',0,-25]];
+
+// ------------------------------------------------------------------ state
+const st = { tab:'create', model:'qwen21', style:'None', aspect:'1:1', size:1.0, count:1,
+             pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set(), running:null };
+const $ = id => document.getElementById(id);
+let API = null, clientId = 'studio-' + Math.random().toString(36).slice(2);
+try { Object.assign(st, JSON.parse(localStorage.getItem('studio.prefs') || '{}'), {running:null, pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set()}); } catch(e) {}
+try { if (!localStorage.getItem('studio.q21default')) { st.model = 'qwen21'; st.style = 'None'; localStorage.setItem('studio.q21default', '1'); } } catch(e) {}
+const savePrefs = () => { try { localStorage.setItem('studio.prefs', JSON.stringify({tab:st.tab, model:st.model, style:st.style, aspect:st.aspect, size:st.size, count:st.count})); } catch(e) {} };
+
+function toast(msg, ok){ const t=$('toast'); t.textContent=msg; t.className='toast'+(ok?' ok':''); t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ok?2500:7000); }
+const model = () => MODELS.find(m => m.id === st.model);
+
+// ------------------------------------------------------------------ render controls
+function renderModels(){
+  const box = $('models'); box.innerHTML = '';
+  let lastFam = null;
+  for (const m of MODELS){
+    if ((m.ckpt && !st.available.has(m.ckpt)) || (m.need && !st.available.has(m.need))) continue;
+    if (m.family !== 'qwen21' && lastFam === 'qwen21') box.insertAdjacentHTML('beforeend', '<div class="grp">Commercial-safe models</div>');
+    if (m.family === 'sdxl' && lastFam !== 'sdxl') box.insertAdjacentHTML('beforeend', '<div class="grp">SDXL looks (work with style LoRAs)</div>');
+    lastFam = m.family;
+    const b = document.createElement('button');
+    const meh = st.tab === 'edit' && m.edit === 'restyle';
+    b.className = m.id === st.model ? 'on' : '';
+    const best = (st.tab==='edit' && m.best==='edit') || (st.tab==='create' && m.best==='create') ? ' · best' : '';
+    b.innerHTML = `<b>${m.name}${best}</b><span>${meh ? 'restyle only - can\'t follow edit instructions' : m.desc}</span>`;
+    b.onclick = () => { st.model = m.id; if (styleOf(st.style)?.family !== m.family) st.style = 'None'; closeMenus(); renderAll(); };
+    box.appendChild(b);
+  }
+  $('modelName').textContent = model().name;
+  $('modelDesc').textContent = st.tab === 'edit' && model().edit === 'restyle' ? 'restyle only' : model().desc;
+  $('modelHint').textContent = st.tab === 'edit' ? 'Qwen 2.1, Klein or Qwen Edit for edits' : '';
+}
+function closeMenus(){ document.querySelectorAll('.menu').forEach(m => m.classList.add('hide')); }
+function toggleMenu(id){ const m = $(id), open = m.classList.contains('hide'); closeMenus(); if (open) m.classList.remove('hide'); }
+document.addEventListener('click', e => { if (!e.target.closest('.pop')) closeMenus(); });
+$('modelBtn').onclick = () => toggleMenu('models');
+$('aspectBtn').onclick = () => toggleMenu('aspects');
+$('sizeBtn').onclick = () => toggleMenu('sizes');
+$('clearPrompt').onclick = () => { $('prompt').value = ''; $('prompt').focus(); };
+// Style LoRAs come from styles.json (written by "Install LoRAs from Downloads" / sort_loras.py).
+let STYLE_LIST = [];
+const FAM_NAME = {zimage:'Z-Image', sdxl:'SDXL', klein:'Klein', qwen:'Qwen', qwen21:'Qwen 2.1'};
+const FAM_MODEL = fam => fam === 'sdxl' ? (model().family === 'sdxl' ? st.model : (st.available.has('DreamShaperXL_Turbo_v2_1.safetensors') ? 'dreamshaper' : 'sdxl')) : fam;
+const styleOf = file => STYLE_LIST.find(s => s.file === file);
+function renderStyles(){
+  const fam = model().family, box = $('styles'); box.innerHTML = '';
+  const avail = STYLE_LIST.filter(s => st.loras.has(s.file));
+  const chip = (s, other) => {
+    const b = document.createElement('button'); b.className = 'chip' + ((s ? s.file : 'None') === st.style ? ' on' : '');
+    b.innerHTML = s ? `${s.name}${other ? ` <small style="opacity:.6">· ${FAM_NAME[s.family]}</small>` : ''}` : 'None';
+    b.title = s ? [s.trigger && 'adds: ' + s.trigger, s.note, other && 'switches the model to ' + FAM_NAME[s.family]].filter(Boolean).join(' · ') : '';
+    b.onclick = () => { st.style = s ? s.file : 'None'; if (s && s.model && st.model !== s.model) st.model = s.model; else if (s && s.family !== fam) st.model = FAM_MODEL(s.family); if (s) $('styleStr').value = s.trained ? 0.9 : 0.8; renderAll(); };
+    box.appendChild(b);
+  };
+  chip(null);
+  avail.filter(s => s.family === fam).forEach(s => chip(s, false));
+  const others = avail.filter(s => s.family !== fam);
+  if (others.length) { box.insertAdjacentHTML('beforeend', '<div style="width:100%;color:var(--dim);font-size:11px;margin-top:4px">Other models\' styles (switches the model)</div>'); others.forEach(s => chip(s, true)); }
+  if (st.style !== 'None' && !styleOf(st.style)) st.style = 'None';
+  const cur = styleOf(st.style);
+  $('styleHint').textContent = cur?.note || (cur?.trigger ? 'adds: ' + cur.trigger : '');
+  $('styleStrengthRow').classList.toggle('hide', st.style === 'None');
+}
+const arIcon = (w, h) => { const sc = 13 / Math.max(w, h); return `<i class="ar" style="width:${Math.round(w*sc)}px;height:${Math.round(h*sc)}px;margin:0"></i>`; };
+const AR_NAMES = {'1:1':'Square','3:4':'Portrait','4:3':'Standard','2:3':'Portrait photo','3:2':'Photo','9:16':'Social story','16:9':'Widescreen','21:9':'Ultrawide'};
+function renderAspects(){
+  const box = $('aspects'); box.innerHTML = '';
+  for (const [k,,w,h] of ASPECTS){
+    const b = document.createElement('button'); b.className = k === st.aspect ? 'on' : '';
+    b.innerHTML = `${arIcon(w,h)} &nbsp;<b style="display:inline">${k}</b> <span>${AR_NAMES[k]}</span>`;
+    b.onclick = () => { st.aspect = k; closeMenus(); renderAll(); }; box.appendChild(b);
+  }
+  const a = ASPECTS.find(x => x[0] === st.aspect);
+  $('aspectBtn').innerHTML = `${arIcon(a[2], a[3])} ${a[0]} ▾`;
+  $('aspectPop').classList.toggle('hide', st.tab === 'edit');   // edits keep the picture's own shape
+}
+function renderSizes(){
+  const box = $('sizes'); box.innerHTML = '';
+  for (const [n,v,hint] of SIZES){
+    const b = document.createElement('button'); b.className = v === st.size ? 'on' : '';
+    b.innerHTML = `<b style="display:inline">${n}</b> <span>${hint}</span>`;
+    b.onclick = () => { st.size = v; closeMenus(); renderAll(); }; box.appendChild(b);
+  }
+  $('sizeBtn').textContent = ((SIZES.find(s => s[1] === st.size) || SIZES[0])[0]) + ' ▾';
+}
+function renderCam(){
+  const isQ = model().family === 'qwen' && st.tab === 'edit';
+  $('secCam').classList.toggle('hide', !isQ);
+  $('camSliders').style.opacity = $('camOn').checked ? 1 : .45;
+  const box = $('camPresets'); if (!box.children.length) for (const [n,h,v] of CAMS){
+    const b = document.createElement('button'); b.className='chip'; b.textContent=n;
+    b.onclick = () => { $('camOn').checked = true; $('camH').value=h; $('camV').value=v; renderCam(); }; box.appendChild(b);
+  }
+  $('camText').textContent = $('camOn').checked ? 'Camera: ' + camWords() + '. Leave the prompt empty, or add an edit ("make it night").' : '';
+}
+function camWords(){
+  const H=['front view','front-right quarter view','right side view','back-right quarter view','back view','back-left quarter view','left side view','front-left quarter view'];
+  const h=+$('camH').value, v=+$('camV').value, z=+$('camZ').value;
+  return H[Math.floor(((h%360)+22.5)/45)%8] + ', ' + (v<-15?'low-angle shot':v<15?'eye-level shot':v<45?'elevated shot':'high-angle shot') + ', ' + (z<2?'wide shot':z<6?'medium shot':'close-up');
+}
+function renderAll(){
+  $('tabCreate').classList.toggle('on', st.tab==='create'); $('tabEdit').classList.toggle('on', st.tab==='edit');
+  $('secPics').classList.toggle('hide', st.tab !== 'edit');
+  $('promptLbl').textContent = st.tab === 'edit' ? 'What to change' : 'Prompt';
+  $('prompt').placeholder = st.tab === 'edit' ? 'e.g. Give him a golden crown and a red cape, keep everything else the same.' : 'Describe what you want: subject, materials, colours, lighting, background...';
+  $('restyleWarn').classList.toggle('hide', !(st.tab === 'edit' && model().edit === 'restyle'));
+  $('paintBtn').disabled = !st.pic1;
+  $('count').textContent = st.count;
+  renderModels(); renderStyles(); renderAspects(); renderSizes(); renderCam(); savePrefs();
+}
+
+// ------------------------------------------------------------------ picture slots
+function setupSlot(el, key){
+  const pick = () => { if (painting && key==='pic1') return; const i=document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=()=>i.files[0]&&loadFile(key,i.files[0]); i.click(); };
+  el.addEventListener('click', e => { if (e.target.classList.contains('x')) return; if (!st[key]) pick(); });
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drag');
+    const f = e.dataTransfer.files[0]; if (f) return loadFile(key, f);
+    const url = e.dataTransfer.getData('text/uri-list'); if (url) loadUrl(key, url); });
+  el.addEventListener('dblclick', pick);
+}
+let pasteTarget = 'pic1';
+document.addEventListener('paste', e => {
+  const f = [...(e.clipboardData?.items||[])].find(i => i.type.startsWith('image/'))?.getAsFile(); if (!f) return;
+  if (st.tab !== 'edit') { st.tab = 'edit'; renderAll(); }
+  loadFile(st.pic1 && !st.pic2 && pasteTarget==='pic2' ? 'pic2' : (st.pic1 ? (pasteTarget) : 'pic1'), f);
+});
+$('slot1').addEventListener('mouseenter', ()=>pasteTarget='pic1'); $('slot2').addEventListener('mouseenter', ()=>pasteTarget='pic2');
+
+async function upload(blob, name){
+  const fd = new FormData(); fd.append('image', blob, name); fd.append('subfolder', 'studio'); fd.append('type', 'input'); fd.append('overwrite', 'true');
+  const r = await fetch('/upload/image', {method:'POST', body:fd}); if (!r.ok) throw new Error('upload failed ' + r.status);
+  const j = await r.json(); return (j.subfolder ? j.subfolder + '/' : '') + j.name;
+}
+async function loadFile(key, file){
+  const url = URL.createObjectURL(file);
+  const img = await loadImg(url);
+  st[key] = {img, url, file, name:null};
+  if (key==='pic1') clearPaint();
+  drawSlot(key);
+  try { st[key].name = await upload(file, 'img_' + Date.now() + '.png'); } catch(e) { toast(e.message); }
+}
+async function loadUrl(key, url, ref){
+  const img = await loadImg(url); st[key] = {img, url, file:null, name:ref || null};
+  if (key==='pic1') clearPaint(); drawSlot(key);
+  if (!ref) { const b = await (await fetch(url)).blob(); st[key].name = await upload(b, 'img_' + Date.now() + '.png'); }
+}
+const loadImg = url => new Promise((res, rej) => { const i = new Image(); i.crossOrigin='anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = url; });
+function drawSlot(key){
+  const el = $(key === 'pic1' ? 'slot1' : 'slot2'), p = st[key];
+  if (!p) { el.innerHTML = key==='pic1' ? '<div>＋<br>Picture 1<br><small>to edit</small></div>' : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; renderAll(); return; }
+  el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>`;
+  if (key === 'pic1') el.appendChild(maskCanvas);
+  el.querySelector('.x').onclick = e => { e.stopPropagation(); st[key] = null; if (key==='pic1') { clearPaint(); stopPaint(); } drawSlot(key); };
+  renderAll();
+}
+setupSlot($('slot1'), 'pic1'); setupSlot($('slot2'), 'pic2');
+
+// ------------------------------------------------------------------ mask painting (precise edit)
+const maskCanvas = document.createElement('canvas'); maskCanvas.width = maskCanvas.height = 512;
+const mctx = maskCanvas.getContext('2d'); let painting = false, down = false;
+function clearPaint(){ mctx.clearRect(0,0,512,512); st.painted = false; $('clearMask').classList.add('hide'); }
+function stopPaint(){ painting = false; $('slot1').classList.remove('painting'); $('paintBtn').textContent = 'Paint area to change'; $('brushBox').classList.add('hide'); }
+$('paintBtn').onclick = () => {
+  if (painting) return stopPaint();
+  painting = true; $('slot1').classList.add('painting'); $('paintBtn').textContent = 'Done painting'; $('brushBox').classList.remove('hide');
+  if (st.tab === 'edit' && model().edit === 'restyle') toast('Tip: precise edits work best with FLUX.2 Klein or Qwen Edit.', true);
+};
+$('clearMask').onclick = clearPaint;
+function paintAt(e){
+  const r = maskCanvas.getBoundingClientRect(), x = (e.clientX - r.left) / r.width * 512, y = (e.clientY - r.top) / r.height * 512;
+  mctx.fillStyle = 'rgba(255,60,90,0.55)'; mctx.globalCompositeOperation = 'source-over';
+  mctx.beginPath(); mctx.arc(x, y, +$('brush').value / 2 * 512 / r.width, 0, 7); mctx.fill();
+  st.painted = true; $('clearMask').classList.remove('hide');
+}
+maskCanvas.addEventListener('pointerdown', e => { if (!painting) return; down = true; maskCanvas.setPointerCapture(e.pointerId); paintAt(e); });
+maskCanvas.addEventListener('pointermove', e => { if (painting && down) paintAt(e); });
+maskCanvas.addEventListener('pointerup', () => down = false);
+// The slot shows the picture with object-fit: contain, so map the 512x512 canvas back onto the picture's own pixels.
+async function maskedPicture(){
+  const img = st.pic1.img, W = img.naturalWidth, H = img.naturalHeight, s = Math.min(512 / W, 512 / H);
+  const ox = (512 - W * s) / 2, oy = (512 - H * s) / 2;
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d');
+  x.drawImage(img, 0, 0);
+  const m = document.createElement('canvas'); m.width = W; m.height = H; const mx = m.getContext('2d');
+  mx.drawImage(maskCanvas, ox, oy, W * s, H * s, 0, 0, W, H);
+  const id = x.getImageData(0, 0, W, H), md = mx.getImageData(0, 0, W, H).data;
+  for (let i = 0; i < md.length; i += 4) id.data[i + 3] = md[i + 3] > 20 ? 0 : 255;  // painted = transparent = "change this"
+  // canvas.toBlob would zero the colour under alpha 0 (premultiplied), and the model must still see the original pixels
+  return upload(await encodePNG(id.data, W, H), 'mask_' + Date.now() + '.png');
+}
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes){ let c = 0xffffffff; for (const b of bytes) c = CRC[(c ^ b) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+async function encodePNG(rgba, w, h){
+  const raw = new Uint8Array((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) { raw[y * (w * 4 + 1)] = 0; raw.set(rgba.subarray(y * w * 4, (y + 1) * w * 4), y * (w * 4 + 1) + 1); }
+  const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer());
+  const chunk = (type, data) => { const out = new Uint8Array(12 + data.length), dv = new DataView(out.buffer);
+    dv.setUint32(0, data.length); out.set([...type].map(c => c.charCodeAt(0)), 4); out.set(data, 8);
+    dv.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length))); return out; };
+  const ihdr = new Uint8Array(13), dv = new DataView(ihdr.buffer); dv.setUint32(0, w); dv.setUint32(4, h); ihdr.set([8, 6, 0, 0, 0], 8);
+  return new Blob([new Uint8Array([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', z), chunk('IEND', new Uint8Array())], {type:'image/png'});
+}
+
+// ------------------------------------------------------------------ prompt enhance (Qwen 3.5 4B)
+$('enhance').onclick = async () => {
+  if (!st.available.has('__qwen35')) return toast('The prompt helper model (Qwen 3.5 4B) is not installed yet.');
+  const txt = $('prompt').value.trim();
+  const edit = st.tab === 'edit';
+  const ask = edit
+    ? `Rewrite this picture-edit instruction so an image editing AI follows it exactly. Keep it to 1-3 sentences, say what to change and that everything else stays the same. Instruction: ${txt || 'improve it'}`
+    : `Expand this into one rich image-generation prompt for a polished casual mobile slot game asset: subject, shape, materials, colours, lighting, camera, background. 2-4 sentences, no lists, no quotes. Idea: ${txt || 'a slot game symbol'}`;
+  const p = {
+    '1': {class_type:'CLIPLoader', inputs:{clip_name:'qwen3.5_4b_bf16.safetensors', type:'stable_diffusion', device:'default'}},
+    '2': {class_type:'TextGenerate', inputs:{clip:['1',0], prompt:ask, max_length:220, sampling_mode:'on',
+          'sampling_mode.temperature':0.7, 'sampling_mode.top_k':64, 'sampling_mode.top_p':0.95, 'sampling_mode.min_p':0.05,
+          'sampling_mode.repetition_penalty':1.05, 'sampling_mode.seed':Math.floor(Math.random()*1e9), 'sampling_mode.presence_penalty':0, thinking:false}},
+    '3': {class_type:'PreviewAny', inputs:{source:['2',0]}},
+  };
+  if (edit && st.pic1?.name) { p['4'] = {class_type:'LoadImage', inputs:{image:st.pic1.name}}; p['2'].inputs.image = ['4',0]; }
+  $('enhance').disabled = true; $('enhance').textContent = '✨ thinking...';
+  try {
+    const id = await queue(p);
+    const out = await waitFor(id);
+    const t = out?.['3']?.text?.[0]; if (t) $('prompt').value = t.trim().replace(/^"|"$/g, '');
+  } catch(e) { toast('Enhance failed: ' + e.message); }
+  $('enhance').disabled = false; $('enhance').textContent = '✨ Enhance';
+};
+
+// ------------------------------------------------------------------ build + run
+const setIn = (p, id, k, v) => { if (p[id]) p[id].inputs[k] = v; };
+async function buildPrompt(){
+  const p = JSON.parse(JSON.stringify(API)), m = model(), edit = st.tab === 'edit';
+  if (edit && !st.pic1) throw new Error('Add Picture 1 first (drag, paste or click the box).');
+  if (edit && st.pic1 && !st.pic1.name) throw new Error('Picture 1 is still uploading, try again in a second.');
+  setIn(p, N.model, 'choice', MODEL_OPTS[m.idx]); setIn(p, N.model, 'index', m.idx);
+  setIn(p, N.task, 'choice', TASK_OPTS[edit ? 1 : 0]); setIn(p, N.task, 'index', edit ? 1 : 0);
+  let text = $('prompt').value.trim();
+  const sty = styleOf(st.style);
+  if (sty && sty.family !== m.family) throw new Error('That style belongs to another model - pick it again.');
+  // Z-Image paints made-up trigger tokens ("3dc4r1c4tur3", "g4me_ass3t") into the picture as text: keep only plain words
+  const trig = !sty?.trigger ? '' : m.family !== 'zimage' ? sty.trigger
+    : sty.trigger.split(',').map(t => t.trim()).filter(t => t && (/\s/.test(t) || !/[\d_<>]/.test(t))).join(', ');
+  if (trig && !text.toLowerCase().includes(trig.toLowerCase().split(',')[0].trim())) text = trig.replace(/,?\s*$/, ',') + ' ' + text;
+  setIn(p, N.prompt, 'value', text);
+  setIn(p, N.neg, 'value', $('neg').value);
+  // pictures
+  if (edit) {
+    let p1 = st.pic1.name;
+    const precise = st.painted;
+    if (precise) p1 = await maskedPicture();
+    setIn(p, N.p1, 'image', p1); setIn(p, N.precise, 'value', precise); setIn(p, N.edge, 'value', +$('edge').value);
+    setIn(p, N.use2, 'value', !!(st.pic2 && st.pic2.name)); if (st.pic2?.name) setIn(p, N.p2, 'image', st.pic2.name);
+  } else { setIn(p, N.precise, 'value', false); setIn(p, N.use2, 'value', false); }
+  // camera (Qwen edit only)
+  const cam = m.family === 'qwen' && edit && $('camOn').checked;
+  setIn(p, N.useCam, 'value', cam);
+  setIn(p, N.cam, 'horizontal_angle', +$('camH').value); setIn(p, N.cam, 'vertical_angle', +$('camV').value); setIn(p, N.cam, 'zoom', +$('camZ').value);
+  if (cam && !text) setIn(p, N.prompt, 'value', '');
+  // size, count, strength
+  const ar = ASPECTS.find(a => a[0] === st.aspect);
+  setIn(p, N.res, 'aspect_ratio', ar[1]); setIn(p, N.res, 'megapixels', st.size); setIn(p, N.editMp, 'value', st.size);
+  setIn(p, N.how, 'value', st.count); setIn(p, N.strength, 'value', +$('strength').value);
+  // styles: every LoRA box off, then the chosen one on
+  for (const id of [N.loraZ, N.loraK, N.loraQ]) setIn(p, id, 'strength_model', 0);
+  setIn(p, N.loraS, 'strength_model', 0); setIn(p, N.loraS, 'strength_clip', 0);
+  if (sty) {
+    const v = +$('styleStr').value;
+    const box = {zimage:N.loraZ, klein:N.loraK, qwen:N.loraQ, sdxl:N.loraS}[m.family];
+    setIn(p, box, 'lora_name', sty.file); setIn(p, box, 'strength_model', v); if (box === N.loraS) setIn(p, box, 'strength_clip', v);
+  }
+  // SDXL checkpoint + its sampler preset
+  if (m.ckpt) {
+    setIn(p, N.ckpt, 'ckpt_name', m.ckpt);
+    for (const id of ['104','110']) { setIn(p, id, 'steps', m.s.steps); setIn(p, id, 'cfg', m.s.cfg); setIn(p, id, 'sampler_name', m.s.sampler); setIn(p, id, 'scheduler', m.s.sched); }
+    setIn(p, '106', 'steps', m.s.steps2); setIn(p, '106', 'cfg', m.s.cfg); setIn(p, '106', 'sampler_name', m.s.sampler); setIn(p, '106', 'scheduler', m.s.sched);
+    // flat ink styles smear in the 1.5x latent upscale: keep size, only a light clean-up pass
+    if (sty && sty.hires === false) { setIn(p, '105', 'scale_by', 1.0); setIn(p, '106', 'denoise', 0.3); }
+  }
+  // Qwen-Image 2.1 turbo vs full
+  setIn(p, N.q21full, 'value', !!m.full);
+  // seeds
+  let seed = +$('seed').value; if (!$('lockSeed').checked) { seed = Math.floor(Math.random() * 2 ** 40); $('seed').value = seed; }
+  for (const id of SEED_NODES) setIn(p, id, 'seed', seed);
+  for (const id of NOISE_NODES) setIn(p, id, 'noise_seed', seed);
+  setIn(p, N.save, 'filename_prefix', 'STUDIO/' + m.id);
+  return {p, meta:{text: $('prompt').value.trim(), model: m.name, style: sty ? sty.name : 'None', styleFile: st.style, seed, edit}};
+}
+async function queue(prompt){
+  const r = await fetch('/prompt', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({prompt, client_id:clientId})});
+  const j = await r.json();
+  if (!r.ok || j.error) { const ne = j.node_errors ? Object.values(j.node_errors).map(e => e.errors?.map(x => x.message + ' ' + (x.details||'')).join('; ')).join(' | ') : ''; throw new Error((j.error?.message || 'queue failed') + ' ' + ne); }
+  return j.prompt_id;
+}
+const waiters = {};
+function waitFor(id){ return new Promise((res, rej) => waiters[id] = {res, rej, out:{}}); }
+
+$('gen').onclick = async () => {
+  let built; try { built = await buildPrompt(); } catch(e) { return toast(e.message); }
+  // more than 4 images run as several batches of up to 4 (12 at once would not fit in 12 GB)
+  const chunks = []; for (let left = st.count; left > 0; left -= 4) chunks.push(Math.min(4, left));
+  $('gen').disabled = true; setStatus('Sending...', 0.02);
+  const jobs = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const p = JSON.parse(JSON.stringify(built.p)), seed = built.meta.seed + i * 1009;
+    setIn(p, N.how, 'value', chunks[i]);
+    for (const id of SEED_NODES) setIn(p, id, 'seed', seed);
+    for (const id of NOISE_NODES) setIn(p, id, 'noise_seed', seed);
+    const pend = addPending(`${built.meta.model} · ${chunks[i]} image${chunks[i] > 1 ? 's' : ''}`);
+    try { const id = await queue(p); jobs.push({id, pend, seed, wait: waitFor(id)}); } catch(e) { pend.remove(); toast(e.message); }
+  }
+  let done = 0;
+  for (const [i, j] of jobs.entries()) {
+    st.running = j.id; st.batch = jobs.length > 1 ? ` (batch ${i + 1}/${jobs.length})` : '';
+    try {
+      const out = await j.wait; j.pend.remove();
+      for (const im of (out[N.save]?.images || [])) { addResult({...im, ...built.meta, seed: j.seed, t: Date.now()}); done++; }
+    } catch(e) { j.pend.remove(); toast(e.message); }
+  }
+  setStatus(done ? `Done: ${done} image${done > 1 ? 's' : ''}.` : 'Finished, but no image came back.', 1);
+  st.running = null; st.batch = ''; $('gen').disabled = false;
+};
+function setStatus(t, f){ $('status').textContent = t; if (f != null) $('barFill').style.width = Math.round(f * 100) + '%'; }
+
+// ------------------------------------------------------------------ websocket progress
+let nodesDone = 0, nodesTotal = 1;
+function connect(){
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?clientId=${clientId}`);
+  ws.onmessage = ev => {
+    if (typeof ev.data !== 'string') return;
+    const {type, data} = JSON.parse(ev.data); const w = waiters[data?.prompt_id];
+    if (type === 'status' && st.running) { const q = data.status?.exec_info?.queue_remaining; if (q > 1) setStatus(`Waiting in queue (${q - 1} ahead)...`); }
+    if (type === 'execution_start' && data.prompt_id === st.running) { nodesDone = 0; setStatus('Starting... (first run of a model loads it from disk)', 0.05); }
+    if (type === 'executing' && data.prompt_id === st.running && data.node) { nodesDone++; }
+    if (type === 'progress' && data.prompt_id === st.running) setStatus(`Generating${st.batch || ''}... step ${data.value}/${data.max}`, 0.1 + 0.85 * data.value / data.max);
+    if (type === 'executed' && w) w.out[data.node] = data.output;
+    if (type === 'execution_success' && w) { w.res(w.out); delete waiters[data.prompt_id]; }
+    if (type === 'execution_error' && w) { w.rej(new Error(`${data.node_type}: ${data.exception_message}`)); delete waiters[data.prompt_id]; }
+    if (type === 'execution_interrupted' && w) { w.rej(new Error('Stopped.')); delete waiters[data.prompt_id]; }
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+
+// ------------------------------------------------------------------ gallery (Freepik-style select)
+let results = []; try { results = JSON.parse(localStorage.getItem('studio.results') || '[]'); } catch(e) {}
+const viewUrl = r => `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder || '')}&type=${r.type || 'output'}`;
+const keyOf = r => (r.subfolder || '') + '/' + r.filename;
+const saveResults = () => { try { localStorage.setItem('studio.results', JSON.stringify(results.slice(0, 600))); } catch(e) {} };
+const sel = new Set(); let anchor = null;
+function addPending(label){
+  const d = document.createElement('div'); d.className = 'card pending'; d.style.setProperty('--ar', 1);
+  d.innerHTML = `<div style="text-align:center"><div class="spin"></div>${label}</div>`;
+  $('grid').querySelector('.empty')?.remove(); $('grid').prepend(d); return d;
+}
+function cardFor(r){
+  const c = document.createElement('div'); c.className = 'card'; c.dataset.k = keyOf(r);
+  c.style.setProperty('--ar', r.w && r.h ? (r.w / r.h).toFixed(3) : 1);
+  const ref = (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]';
+  c.innerHTML = `<button class="ck" title="Select (Shift = range)">✓</button><img loading="lazy" src="${viewUrl(r)}" alt="" draggable="false">
+    <div class="acts"><button data-a="edit" title="Edit this picture">Edit</button><button data-a="ref" title="Use as Picture 2">Ref</button>
+    <button data-a="reuse" title="Reuse prompt and settings">Reuse</button><a href="${viewUrl(r)}" download="${r.filename}" title="Download">⬇</a></div>
+    <div class="meta">${r.model || ''}${r.style && r.style !== 'None' ? ' · ' + r.style : ''} · ${(r.text || '').replace(/</g, '&lt;')}</div>`;
+  const img = c.querySelector('img');
+  img.onload = () => { if (!r.w) { r.w = img.naturalWidth; r.h = img.naturalHeight; c.style.setProperty('--ar', (r.w / r.h).toFixed(3)); saveResults(); } };
+  c.querySelector('.ck').onclick = e => { e.stopPropagation(); toggleSel(r, e.shiftKey); };
+  img.onclick = e => { if (e.shiftKey || e.ctrlKey || e.metaKey || sel.size) return toggleSel(r, e.shiftKey); $('lbImg').src = viewUrl(r); $('lightbox').classList.add('on'); };
+  c.querySelector('[data-a=edit]').onclick = () => editResult(r);
+  c.querySelector('[data-a=ref]').onclick = () => { st.tab = 'edit'; loadUrl('pic2', viewUrl(r), ref); renderAll(); };
+  c.querySelector('[data-a=reuse]').onclick = () => { $('prompt').value = r.text || ''; const m = MODELS.find(x => x.name === r.model); if (m) st.model = m.id; st.style = r.styleFile || 'None'; $('seed').value = r.seed || 7; renderAll(); };
+  return c;
+}
+const EDIT_DEFAULT = () => st.available.has(MODELS[0].need) ? 'qwen21' : 'klein';
+function editResult(r){ st.tab = 'edit'; if (model().edit === 'restyle') st.model = EDIT_DEFAULT(); loadUrl('pic1', viewUrl(r), (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]'); renderAll(); }
+function addResult(r){ results.unshift(r); saveResults(); $('grid').querySelector('.empty')?.remove(); $('grid').prepend(cardFor(r)); updateCount(); }
+function renderGallery(){
+  const g = $('grid'); g.innerHTML = '';
+  if (!results.length) g.innerHTML = '<div class="empty"><b>Your images appear here</b>Pick a model, describe what you want and press Generate.<br>To edit a picture: open "Edit picture" and paste it (Ctrl+V).</div>';
+  for (const r of results) g.appendChild(cardFor(r));
+  updateCount(); renderSel();
+}
+const updateCount = () => $('gcount').textContent = results.length ? `${results.length} image${results.length > 1 ? 's' : ''}` : '';
+function toggleSel(r, range){
+  const k = keyOf(r);
+  if (range && anchor) {
+    const keys = results.map(keyOf), a = keys.indexOf(anchor), b = keys.indexOf(k);
+    if (a >= 0 && b >= 0) { for (let i = Math.min(a, b); i <= Math.max(a, b); i++) sel.add(keys[i]); renderSel(); return; }
+  }
+  sel.has(k) ? sel.delete(k) : sel.add(k); anchor = k; renderSel();
+}
+function renderSel(){
+  for (const c of $('grid').querySelectorAll('.card[data-k]')) c.classList.toggle('sel', sel.has(c.dataset.k));
+  $('gallery').classList.toggle('selecting', sel.size > 0);
+  $('selBar').classList.toggle('hide', !sel.size);
+  $('selN').textContent = `${sel.size} selected`;
+  $('selEdit').classList.toggle('hide', sel.size !== 1);
+  let hintOff = false; try { hintOff = localStorage.getItem('studio.hintOff') === '1'; } catch(e) {}
+  $('selHint').classList.toggle('hide', !sel.size || hintOff);
+}
+const selected = () => results.filter(r => sel.has(keyOf(r)));
+$('selX').onclick = () => { sel.clear(); renderSel(); };
+$('selAll').onclick = $('selAllTop').onclick = () => { results.forEach(r => sel.add(keyOf(r))); renderSel(); };
+$('hintX').onclick = () => { try { localStorage.setItem('studio.hintOff', '1'); } catch(e) {} renderSel(); };
+$('selEdit').onclick = () => { const r = selected()[0]; if (r) { sel.clear(); renderSel(); editResult(r); } };
+$('selDl').onclick = async () => { for (const r of selected()) { const a = document.createElement('a'); a.href = viewUrl(r); a.download = r.filename; document.body.appendChild(a); a.click(); a.remove(); await new Promise(x => setTimeout(x, 250)); } };
+$('selDel').onclick = () => deleteSelected();
+async function deleteSelected(skipConfirm){
+  const items = selected(); if (!items.length) return;
+  if (!skipConfirm && !confirm(`Delete ${items.length} picture${items.length > 1 ? 's' : ''}?\n(They move to ComfyUI\\output\\_trash, so you can still get them back.)`)) return;
+  let note = '';
+  try {
+    const r = await fetch('/slot_studio/trash', {method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({files:items.map(x => ({filename:x.filename, subfolder:x.subfolder || '', type:x.type || 'output'}))})});
+    if (!r.ok) note = ' Files kept on disk: restart ComfyUI once to enable the trash.';
+  } catch(e) { note = ' Files kept on disk.'; }
+  const gone = new Set(items.map(keyOf));
+  results = results.filter(r => !gone.has(keyOf(r))); saveResults();
+  for (const c of [...$('grid').querySelectorAll('.card[data-k]')]) if (gone.has(c.dataset.k)) c.remove();
+  sel.clear(); renderSel(); updateCount();
+  if (!results.length) renderGallery();
+  toast(`Removed ${items.length}.` + note, !note);
+}
+// drag a box on empty space to select (Shift/Ctrl adds to the current selection)
+(() => {
+  const gal = $('gallery'); let box = null, start = null, base = null;
+  gal.addEventListener('mousedown', e => {
+    if (e.button !== 0 || e.target.closest('.card') || e.target.closest('button')) return;
+    const r = gal.getBoundingClientRect();
+    start = {x: e.clientX - r.left + gal.scrollLeft, y: e.clientY - r.top + gal.scrollTop};
+    base = (e.shiftKey || e.ctrlKey) ? new Set(sel) : new Set();
+    box = document.createElement('div'); box.className = 'marquee'; gal.appendChild(box);
+  });
+  window.addEventListener('mousemove', e => {
+    if (!box) return;
+    const r = gal.getBoundingClientRect(), x = e.clientX - r.left + gal.scrollLeft, y = e.clientY - r.top + gal.scrollTop;
+    const L = Math.min(x, start.x), T = Math.min(y, start.y), W = Math.abs(x - start.x), H = Math.abs(y - start.y);
+    Object.assign(box.style, {left: L + 'px', top: T + 'px', width: W + 'px', height: H + 'px'});
+    if (W < 4 && H < 4) return;
+    sel.clear(); base.forEach(k => sel.add(k));
+    for (const c of gal.querySelectorAll('.card[data-k]')) {
+      const cr = c.getBoundingClientRect(), cl = cr.left - r.left + gal.scrollLeft, ct = cr.top - r.top + gal.scrollTop;
+      if (cl < L + W && cl + cr.width > L && ct < T + H && ct + cr.height > T) sel.add(c.dataset.k);
+    }
+    renderSel();
+  });
+  window.addEventListener('mouseup', () => { if (box) { box.remove(); box = null; } });
+})();
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); results.forEach(r => sel.add(keyOf(r))); renderSel(); }
+  if (e.key === 'Escape') { sel.clear(); renderSel(); $('lightbox').classList.remove('on'); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel.size) { e.preventDefault(); deleteSelected(); }
+});
+const setThumb = v => { $('gallery').style.setProperty('--th', v + 'px'); try { localStorage.setItem('studio.thumb', v); } catch(e) {} };
+$('thumb').oninput = e => setThumb(e.target.value);
+try { const t = localStorage.getItem('studio.thumb'); if (t) { $('thumb').value = t; setThumb(t); } } catch(e) {}
+$('lightbox').onclick = () => $('lightbox').classList.remove('on');
+
+// ------------------------------------------------------------------ wiring
+$('tabCreate').onclick = () => { st.tab = 'create'; stopPaint(); renderAll(); };
+$('tabEdit').onclick = () => { st.tab = 'edit'; if (model().edit === 'restyle') st.model = EDIT_DEFAULT(); renderAll(); };
+$('cMinus').onclick = () => { st.count = Math.max(1, st.count - 1); renderAll(); };
+$('cPlus').onclick = () => { st.count = Math.min(12, st.count + 1); renderAll(); };
+for (const id of ['camOn','camH','camV','camZ']) $(id).addEventListener('input', renderCam);
+$('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('gen').click(); });
+
+(async function init(){
+  try {
+    API = await (await fetch('image_api.json', {cache:'no-store'})).json();
+    const [ck, lo, te, dm] = await Promise.all(['checkpoints','loras','text_encoders','diffusion_models'].map(f => fetch('/models/' + f).then(r => r.json()).catch(() => [])));
+    ck.forEach(f => st.available.add(f)); dm.forEach(f => st.available.add(f)); lo.forEach(f => st.loras.add(f));
+    if (te.includes('qwen3.5_4b_bf16.safetensors')) st.available.add('__qwen35');
+    try { STYLE_LIST = await (await fetch('styles.json', {cache:'no-store'})).json(); }
+    catch(e) { for (const [fam, arr] of Object.entries(STYLES)) for (const x of arr) if (x.f) STYLE_LIST.push({file:x.f, family:fam, name:x.n, trigger:x.t || '', note:x.lic ? 'No licence - tests and concepts only' : ''}); }
+    $('enhance').classList.toggle('hide', !st.available.has('__qwen35'));
+    const ok = m => (!m.ckpt || st.available.has(m.ckpt)) && (!m.need || st.available.has(m.need));
+    if (!MODELS.some(m => m.id === st.model && ok(m))) st.model = ok(MODELS[0]) ? 'qwen21' : 'zimage';
+    if (!SIZES.some(s => s[1] === st.size)) st.size = 1.0;
+  } catch(e) { toast('Could not reach ComfyUI: ' + e.message); }
+  renderAll(); renderGallery(); connect();
+})();
+</script>
+</body>
+</html>
