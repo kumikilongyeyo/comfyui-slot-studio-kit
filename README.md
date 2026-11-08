@@ -47,12 +47,20 @@ finished files are skipped and half-done files resume.
 
 * **Slot Studio** (Desktop) – simple page with **Image** and **Video** tabs. Pick model, write a prompt, Generate.
   Results land in `ComfyUI\output\STUDIO` and `ComfyUI\output\video\STUDIO`.
-  * Type **@** in a prompt to tag a reference (`@Picture1`, `@Picture2`; video: `@Start`, `@End`, `@Image`, `@Video`).
+  * Up to **10 reference pictures** (＋ tile). Image: Qwen-Image 2.1 and Klein use all 10, Qwen Edit the first 3.
+    Video: up to 10 added images - with no start/end image they make a **References** video (H3 reference-to-video);
+    copy motion / new camera use them as extra references. References stay when you switch Image <-> Video.
+  * **Enhance prompt** checkbox: the local Qwen 3.5 4B rewrites the prompt inside the same job (clearer, translated to
+    English, tags kept); the rewritten text shows on the result (✨, hover). Unticked = sent exactly as typed.
+  * Type **@** in a prompt to tag a reference (`@Picture1`…`@Picture10`; video: `@Start`, `@End`, `@Image1`…, `@Video`).
     The page swaps each tag for the name the chosen model uses for that picture (`Picture 2` for Qwen Edit,
     `<image2>` for Qwen-Image 2.1, `image 2` for Klein, `<Picture 1>` / `<Video 1>` for MiniMax H3).
   * Generate stays usable while a job runs: extra jobs wait in ComfyUI's queue (one GPU = one at a time).
     Switching between Image and Video keeps your running jobs; they show up when you come back.
-  * 🗑 Delete (pictures and videos) moves the files to `ComfyUI\output\_trash`, so they can still be recovered.
+  * Select several pictures or videos (checkbox, Shift, drag a box, Ctrl+A) → bar with Download / Delete.
+    🗑 Delete moves the files to `ComfyUI\output\_trash` (never overwrites an older trashed file), so they can be recovered.
+  * Output names carry the date and time (`qwen21_261108-214110_00001_.png`), so a deleted file's name is never
+    reused - before, the browser could show the old cached picture on a new result.
 * **Start ComfyUI** – the node editor. Open the **Workflows** sidebar → `16_IMAGE_All_In_One` or
   `17_VIDEO_All_In_One`; switch MODEL / TASK / MODE in the panel at the top and press Run.
 * **Stop ComfyUI** – closes it and frees the GPU.

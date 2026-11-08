@@ -39,6 +39,7 @@ aside{background:var(--panel);border-right:1px solid var(--line);display:flex;fl
 .media .hint{color:var(--dim);font-size:12px;margin-left:auto}
 .mitems{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .mitems .slot{width:96px;height:96px}
+.mitems .slot.addref{border-style:dashed;color:var(--dim);font-size:11.5px}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
 .seg button{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:7px 6px;font-size:12px;text-align:center}
 .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -59,6 +60,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .row{display:flex;gap:8px;align-items:center}
 .soundline{margin-top:8px;display:flex;gap:8px;align-items:center;color:var(--dim);font-size:12px}
 .soundline input{flex:1}
+.enh{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--text);cursor:pointer;margin-top:8px}
+.enh small{color:var(--dim)}
 details{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
 details summary{cursor:pointer;color:var(--dim);font-weight:600;font-size:12.5px}
 .kv{display:grid;grid-template-columns:110px 1fr;gap:8px 10px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--dim)}
@@ -126,6 +129,20 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .tagmenu button.off{opacity:.55}
 .tagmenu img,.tagmenu .ph{width:32px;height:32px;border-radius:6px;object-fit:cover;background:var(--media);display:flex;align-items:center;justify-content:center;flex:none}
 .tagmenu small{color:var(--dim);font-size:11px;margin-left:auto;text-align:right}
+.card .ck{position:absolute;top:8px;left:8px;width:24px;height:24px;border-radius:6px;border:2px solid #fff;background:#0005;color:#fff;font-size:13px;padding:0;z-index:2;opacity:0;transition:opacity .12s;display:flex;align-items:center;justify-content:center}
+.card:hover .ck,.gallery.selecting .ck{opacity:1}
+.card.sel .ck{background:var(--accent);border-color:var(--accent);opacity:1}
+.card.sel{outline:3px solid var(--accent);outline-offset:-3px}
+.selbar{position:fixed;left:calc(50% + 200px);bottom:18px;transform:translateX(-50%);display:flex;white-space:nowrap;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 8px;box-shadow:0 10px 30px #0002;z-index:30}
+.selbar .n{font-weight:600;font-size:13px;padding:0 6px}
+.selbar button{background:var(--chip);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12.5px}
+.selbar button.del{color:#c0392b}
+.selbar button.x{background:none;border:0;font-size:16px;color:var(--dim)}
+.selhint{position:fixed;left:calc(50% + 200px);bottom:68px;transform:translateX(-50%);white-space:nowrap;background:var(--soft);border:1px solid #c9d8fb;color:#1e3a8a;border-radius:10px;padding:6px 10px;font-size:12px;z-index:30;display:flex;gap:10px;align-items:center}
+.selhint button{background:none;border:0;color:#1e3a8a}
+.marquee{position:absolute;border:1.5px solid var(--accent);background:#2563eb1a;pointer-events:none;z-index:5}
+.gallery{position:relative}
+@media (max-width:900px){.selbar,.selhint{left:50%}}
 .hide{display:none!important}
 @media (max-width:900px){.app{grid-template-columns:1fr;height:auto}.gallery{min-height:60vh}}
 </style>
@@ -167,6 +184,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
         <span class="hint">Add media</span>
       </div>
       <div class="mitems" id="mitems"></div>
+      <div class="warn hide" id="imgNote"></div>
       <div id="vidUse" class="hide">
         <div class="hint" style="margin-top:10px">Use the video to:</div>
         <div class="seg" id="useSeg">
@@ -184,6 +202,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
     <div class="sec">
       <div id="shotBox"><div class="lbl">Shot <button class="plus" id="addShot" title="Add another shot">+</button></div>
       <div class="shots" id="shots"></div></div>
+      <label class="enh" title="On: every Generate rewrites your description first (clearer, translated to English, tags kept). Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> ✨ Enhance prompt <small>rewrite + translate to English</small></label>
       <div class="soundline" id="soundLine"><span>🔊 Sound</span><input type="text" id="soundText" placeholder="music, effects, voices - e.g. upbeat casino jingle, coins clinking"></div>
     </div>
 
@@ -211,8 +230,11 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 </aside>
 
 <main>
-  <div class="top"><h2>Videos</h2><span class="sp"></span><button class="ghost" id="clearGallery">Clear list</button></div>
+  <div class="top"><h2>Videos</h2><small id="gcount" style="color:var(--dim)"></small><span class="sp"></span><button class="ghost" id="selAllTop">Select all</button><button class="ghost" id="clearGallery">Clear list</button></div>
   <div class="gallery" id="gallery"></div>
+  <div class="selhint hide" id="selHint">Hold <b>Shift</b> or <b>drag a box</b> to select several · Ctrl+A all · Delete key removes<button id="hintX">✕</button></div>
+  <div class="selbar hide" id="selBar"><button class="x" id="selX" title="Clear selection">✕</button><span class="n" id="selN"></span>
+    <button id="selAll">Select all</button><button id="selDl">⬇ Download</button><button class="del" id="selDel">🗑 Delete</button></div>
 </main>
 </div>
 <div class="toast" id="toast"></div>
@@ -227,8 +249,8 @@ const ARS = [['16:9','16:9 (Widescreen)',16,9],['9:16','9:16 (Portrait Widescree
 const QS = [['Draft',0.4,'~864x480 · fastest'],['Standard',0.6,'~1056x608'],['HD 768p',0.98,'1344x768 · slow']];
 const CAMS = [['¾ right',45,10],['Right side',90,0],['¾ left',315,10],['From above',30,45],['Low angle',20,-25],['Behind',180,15]];
 
-const st = {start:null, end:null, img:null, vid:null, use:'motion', cam:[45,10,5], dur:3, ar:'16:9', q:0.4, sound:true, running:null, kind:'single', panels:[]};
-try { Object.assign(st, JSON.parse(localStorage.getItem('studio.video.prefs') || '{}'), {start:null, end:null, img:null, vid:null, running:null, panels:[]}); } catch(e) {}
+const st = {start:null, end:null, imgs:[], vid:null, use:'motion', cam:[45,10,5], dur:3, ar:'16:9', q:0.4, sound:true, running:null, kind:'single', panels:[]};
+try { Object.assign(st, JSON.parse(localStorage.getItem('studio.video.prefs') || '{}'), {start:null, end:null, imgs:[], vid:null, running:null, panels:[]}); } catch(e) {}
 const save = () => { try { localStorage.setItem('studio.video.prefs', JSON.stringify({use:st.use, cam:st.cam, dur:st.dur, ar:st.ar, q:st.q, sound:st.sound, kind:st.kind})); } catch(e) {} };
 const $ = id => document.getElementById(id);
 // clientId stays the same for this browser tab (sessionStorage), so after Image -> Video the websocket gets this
@@ -241,7 +263,7 @@ function toast(m, ok){ const t=$('toast'); t.textContent=m; t.className='toast'+
 // ------------------------------------------------------------------ @ tags (same code in index.html + video.html)
 // Type @ in a prompt box to tag a reference (@Picture1, @Start, ...). The box keeps the readable tag and
 // highlights it; on Generate, resolveTags() swaps each tag for the word the chosen model knows that picture by.
-const TAG_RE = /@([A-Za-z]+\d?)\b/g;
+const TAG_RE = /@([A-Za-z]+\d*)\b/g;
 const TAG_BOXES = new Set();
 const escHTML = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
 const repaintTags = () => TAG_BOXES.forEach(b => b.isConnected ? b._tagPaint() : TAG_BOXES.delete(b));
@@ -325,23 +347,33 @@ $('addShot').onclick = () => addShot().querySelector('textarea').focus();
 // @ tags. H3 numbers its references per request (comfy/text_encoders/minimax.py): first/last-frame shots label them
 // "<Picture 1>", "<Picture 2>"; reference shots label pictures "<Picture i>" and videos "<Video k>" in input order.
 // What sits in which slot depends on the mode (17's wiring), so the words are picked per mode here.
-const VTAGS = ['start', 'end', 'image', 'video'];
+const MAX_IMGS = 10;   // H3 reference-to-video takes ref_image_0..9
+const VTAGS = ['start', 'end', 'image', 'video', ...Array.from({length:MAX_IMGS}, (_, i) => 'image' + (i + 1))];
+const MODE_NAME = {0:'animate pictures', 1:'text only', 2:'copy motion', 3:'new background', 4:'new camera', 5:'references'};
 const singleTags = () => [
   {tag:'Start', sub:'start image', thumb:st.start?.url, ok:!!st.start},
   {tag:'End', sub:'end image', thumb:st.end?.url, ok:!!st.end},
-  {tag:'Image', sub:'added image', thumb:st.img?.url, ok:!!st.img},
+  ...Array.from({length:Math.max(1, st.imgs.length)}, (_, i) => ({tag:'Image' + (i + 1), sub:'added image', thumb:st.imgs[i]?.url, ok:!!st.imgs[i]})),
   {tag:'Video', sub:'added video', icon:'🎬', ok:!!st.vid}];
+// image k (1-based) -> the H3 word, per mode. Copy motion / new camera: Picture 1 is the start image / the re-angled
+// frame, so added image k is Picture k+1. References mode: added image k is Picture k. New background: image 1 only.
 function videoTagWords(m){
-  if (m === 0) return {start:st.start ? '<Picture 1>' : null, end:st.end ? (st.start ? '<Picture 2>' : '<Picture 1>') : null};
-  if (m === 2) return {start:'<Picture 1>', image:st.img ? '<Picture 2>' : null, video:'the pose video'};   // pose video drives a ControlNet, not a reference
-  if (m === 3) return {image:'<Picture 1>', video:'the video'};   // the new background is the first frame
-  if (m === 4) return {image:st.img ? '<Picture 2>' : null, video:'<Video 1>'};   // Picture 1 = the re-angled first frame
-  return {};
+  const w = {};
+  const imgs = (first, from) => st.imgs.forEach((x, i) => { if (i + from <= MAX_IMGS) w['image' + (i + 1)] = `<Picture ${i + first}>`; });
+  if (m === 0) { w.start = st.start ? '<Picture 1>' : null; w.end = st.end ? (st.start ? '<Picture 2>' : '<Picture 1>') : null; }
+  if (m === 2) { w.start = '<Picture 1>'; imgs(2, 2); w.video = 'the pose video'; }   // pose video drives a ControlNet, not a reference
+  if (m === 3) { if (st.imgs[0]) w.image1 = '<Picture 1>'; w.video = 'the video'; }   // the new background is the first frame
+  if (m === 4) { imgs(2, 2); w.video = '<Video 1>'; }
+  if (m === 5) imgs(1, 1);
+  if (w.image1) w.image = w.image1;   // plain @Image = image 1
+  return w;
 }
 const videoTagWhy = m => t => {
-  const k = t.toLowerCase(), key = {start:'start', end:'end', image:'img', video:'vid'}[k];
-  if (!st[key]) return `You tagged @${t}, but there is no ${k === 'image' || k === 'video' ? 'added ' + k : k + ' image'} - add it or remove the tag.`;
-  return `@${t} isn't used in this mode (${{0:'animate pictures', 1:'text only', 2:'copy motion', 3:'new background', 4:'new camera'}[m]}) - remove the tag.`;
+  const k = t.toLowerCase(), n = +(k.match(/\d+/)?.[0] || 1);
+  const have = k === 'start' ? st.start : k === 'end' ? st.end : k === 'video' ? st.vid : st.imgs[n - 1];
+  if (!have) return `You tagged @${t}, but there is no ${k === 'video' ? 'added video' : k.startsWith('image') ? 'added image ' + n : k + ' image'} - add it or remove the tag.`;
+  if (k.startsWith('image') && (m === 0 || m === 1)) return `Added images aren't used while there is a start/end image (animate mode). Remove @${t}, or remove the start/end image to make a video from the references.`;
+  return `@${t} isn't used in this mode (${MODE_NAME[m]}) - remove the tag.`;
 };
 function promptText(){
   const shots = [...$('shots').querySelectorAll('textarea')].map(t => t.value.trim()).filter(Boolean);
@@ -357,37 +389,66 @@ async function upload(blob, name){
   const j = await r.json(); return (j.subfolder ? j.subfolder + '/' : '') + j.name;
 }
 const isVideo = f => /^video\//.test(f.type) || /\.(mp4|webm|mov|mkv)$/i.test(f.name || '');
+const getK = key => typeof key === 'number' ? st.imgs[key] : st[key];
+function setK(key, v){ if (typeof key === 'number') { if (v) st.imgs[key] = v; else st.imgs.splice(key, 1); } else st[key] = v; }
 async function setFile(key, file){
-  const url = URL.createObjectURL(file);
-  st[key] = {url, name:null, video:isVideo(file)}; render();
-  try { st[key].name = await upload(file, (st[key].video ? 'vid_' : 'img_') + Date.now() + (st[key].video ? '.mp4' : '.png')); }
-  catch(e) { toast(e.message); st[key] = null; render(); }
+  const url = URL.createObjectURL(file), it = {url, name:null, video:isVideo(file)};
+  setK(key, it); render();
+  try { it.name = await upload(file, (it.video ? 'vid_' : 'img_') + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + (it.video ? '.mp4' : '.png')); render(); }
+  catch(e) { toast(e.message); const i = typeof key === 'number' ? st.imgs.indexOf(it) : key; if (i !== -1) setK(i, null); render(); }
+}
+function addImages(files){
+  for (const f of [...files]) {
+    if (isVideo(f)) { setFile('vid', f); continue; }
+    if (st.imgs.length >= MAX_IMGS) { toast(`Up to ${MAX_IMGS} added images.`); break; }
+    setFile(st.imgs.length, f);
+  }
+}
+// references are kept (names of files already on the server) so they are still there after Image <-> Video
+const REFS_KEY = 'studio.refs.video';
+function saveRefs(){
+  const n = x => x?.name || null;
+  try { localStorage.setItem(REFS_KEY, JSON.stringify({start:n(st.start), end:n(st.end), vid:n(st.vid), imgs:st.imgs.map(n).filter(Boolean)})); } catch(e) {}
+}
+const refUrl = name => { const out = / \[output\]$/.test(name), nm = name.replace(/ \[\w+\]$/, ''), i = nm.lastIndexOf('/');
+  return `/view?filename=${encodeURIComponent(nm.slice(i + 1))}&subfolder=${encodeURIComponent(i < 0 ? '' : nm.slice(0, i))}&type=${out ? 'output' : 'input'}`; };
+function restoreRefs(){
+  let s = null; try { s = JSON.parse(localStorage.getItem(REFS_KEY) || 'null'); } catch(e) {}
+  if (!s) return;
+  const it = (name, video) => name ? {url:refUrl(name), name, video} : null;
+  st.start = it(s.start, false); st.end = it(s.end, false); st.vid = it(s.vid, true);
+  st.imgs = (s.imgs || []).map(n => it(n, false));
 }
 function pick(key, accept){ const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.onchange = () => i.files[0] && setFile(key, i.files[0]); i.click(); }
 function slotHTML(key, label, icon){
-  const p = st[key];
+  const p = getK(key);
   if (!p) return `<div><span class="ic">${icon}</span>${label}</div>`;
   const media = p.video ? `<video src="${p.url}" muted loop autoplay playsinline></video>` : `<img src="${p.url}" alt="">`;
   return `${media}<button class="x" data-k="${key}" title="Remove">×</button><span class="cap">${label}</span>`;
 }
 function wireSlot(el, key, accept){
-  el.onclick = e => { if (e.target.classList.contains('x')) { st[e.target.dataset.k] = null; render(); e.stopPropagation(); return; } if (!st[key]) pick(key, accept); };
+  el.onclick = e => { if (e.target.classList.contains('x')) { setK(key, null); render(); e.stopPropagation(); return; } if (!getK(key)) pick(key, accept); };
   el.ondragover = e => { e.preventDefault(); el.classList.add('drag'); };
   el.ondragleave = () => el.classList.remove('drag');
   el.ondrop = e => { e.preventDefault(); el.classList.remove('drag'); const f = e.dataTransfer.files[0]; if (f) setFile(key, f); };
-  el.onmouseenter = () => hover = key;
+  el.onmouseenter = () => hover = key; el.onmouseleave = () => hover = null;
 }
 let hover = null;
 document.addEventListener('paste', e => {
-  const f = [...(e.clipboardData?.items || [])].map(i => i.getAsFile()).find(Boolean); if (!f) return;
-  if (st.kind === 'board') return isVideo(f) ? toast('Storyboard panels are pictures.') : addPanels([f]);
-  if (isVideo(f)) return setFile('vid', f);
-  setFile(hover && hover !== 'vid' ? hover : (!st.start ? 'start' : !st.end ? 'end' : 'img'), f);
+  const fs = [...(e.clipboardData?.items || [])].map(i => i.getAsFile()).filter(Boolean); if (!fs.length) return;
+  e.preventDefault();
+  if (st.kind === 'board') return fs.some(isVideo) ? toast('Storyboard panels are pictures.') : addPanels(fs);
+  if (fs.length === 1 && isVideo(fs[0])) return setFile('vid', fs[0]);
+  if (fs.length === 1 && hover != null && hover !== 'vid') return setFile(hover, fs[0]);   // over a box = replace that one
+  // empty start box first, then added images (the end image is only filled by dropping/pasting on it)
+  const rest = [...fs]; if (!st.start && hover == null && !isVideo(rest[0])) setFile('start', rest.shift());
+  addImages(rest);
 });
-$('addImg').onclick = () => pick('img', 'image/*');
+const pickMany = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => addImages(i.files); i.click(); };
+$('addImg').onclick = pickMany;
 $('addVid').onclick = () => pick('vid', 'video/*');
 $('mediaBar').ondragover = e => e.preventDefault();
-$('mediaBar').ondrop = e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setFile(isVideo(f) ? 'vid' : 'img', f); };
+$('mediaBar').ondrop = e => { e.preventDefault(); addImages(e.dataTransfer.files); };
 
 // ------------------------------------------------------------------ chips / menus
 const arIcon = (w, h) => { const s = 13 / Math.max(w, h); return `<i class="ar" style="width:${Math.round(w*s)}px;height:${Math.round(h*s)}px"></i>`; };
@@ -407,15 +468,24 @@ for (const [n,h,v] of CAMS) { const b = document.createElement('button'); b.clas
   b.onclick = () => { st.cam = [h, v, 5]; render(); }; $('camPresets').appendChild(b); }
 
 // ------------------------------------------------------------------ mode logic
-// 17's modes: 0 animate pictures, 1 text only, 2 copy motion / swap character, 3 new background, 4 new camera
+// 17's modes: 0 animate pictures, 1 text only, 2 copy motion / swap character, 3 new background, 4 new camera.
+// 5 = references (page-only): added images, no start/end/video -> H3 reference-to-video built in addRefNodes().
 function mode(){
   if (st.vid) return {motion:2, background:3, camera:4}[st.use];
-  return (st.start || st.end) ? 0 : 1;
+  if (st.start || st.end) return 0;
+  return st.imgs.length ? 5 : 1;
 }
 function problems(){
   const m = mode();
   if (m === 2 && !st.start) return 'Copy motion: add a Start image of the character that should do the moves.';
-  if (m === 3 && !st.img) return 'New background: add the new place with "+ Image".';
+  if (m === 3 && !st.imgs[0]) return 'New background: add the new place with "+ Image".';
+  return '';
+}
+function imgNote(){
+  const m = mode(), n = st.imgs.length; if (!n) return '';
+  if (m === 0) return `Your ${n} added image${n > 1 ? 's are' : ' is'} not used while there is a start/end image. Remove the start/end image to make a video from the references.`;
+  if (m === 3 && n > 1) return 'New background uses only image 1.';
+  if ((m === 2 || m === 4) && n > MAX_IMGS - 1) return `This mode takes ${MAX_IMGS - 1} added images; the last one is skipped.`;
   return '';
 }
 function render(){
@@ -432,9 +502,18 @@ function render(){
   $('slotStart').innerHTML = slotHTML('start', 'Start image', '🖼');
   $('slotEnd').innerHTML = slotHTML('end', 'End image', '🏁');
   const it = $('mitems'); it.innerHTML = '';
-  for (const [k, lab] of [['img', 'Image'], ['vid', 'Video']]) if (st[k]) {
+  const keys = [...st.imgs.map((_, i) => [i, 'Image ' + (i + 1)]), ...(st.vid ? [['vid', 'Video']] : [])];
+  for (const [k, lab] of keys) {
     const d = document.createElement('div'); d.className = 'slot'; d.innerHTML = slotHTML(k, lab, ''); wireSlot(d, k, k === 'vid' ? 'video/*' : 'image/*'); it.appendChild(d);
   }
+  if (st.imgs.length && st.imgs.length < MAX_IMGS) {
+    const d = document.createElement('div'); d.className = 'slot addref'; d.title = 'Add more images - click, drop or paste';
+    d.innerHTML = `<div><b style="font-size:20px;color:var(--accent)">＋</b><br>${st.imgs.length}/${MAX_IMGS}</div>`;
+    d.onclick = pickMany; d.ondragover = e => { e.preventDefault(); d.classList.add('drag'); }; d.ondragleave = () => d.classList.remove('drag');
+    d.ondrop = e => { e.preventDefault(); d.classList.remove('drag'); addImages(e.dataTransfer.files); }; it.appendChild(d);
+  }
+  const note = imgNote(); $('imgNote').textContent = note; $('imgNote').classList.toggle('hide', !note);
+  saveRefs();
   $('loopRow').classList.toggle('hide', !(st.start && !st.end && !st.vid));
   $('vidUse').classList.toggle('hide', !st.vid);
   document.querySelectorAll('#useSeg button').forEach(b => b.classList.toggle('on', b.dataset.u === st.use));
@@ -442,12 +521,13 @@ function render(){
   document.querySelectorAll('#camPresets .chip').forEach(b => b.classList.toggle('on', +b.dataset.h === st.cam[0] && +b.dataset.v === st.cam[1]));
   const pr = problems(); $('useWarn').textContent = pr; $('useWarn').classList.toggle('hide', !pr || !st.vid);
   const hints = {0:'Animate your picture' + (st.end ? (st.start ? ' from start to end image' : ' ending on the end image') : ''), 1:'Text to video',
-                 2:'Copy the video\'s motion onto the start image', 3:'Put the video\'s character on a new background', 4:'Re-film the video from a new angle'};
+                 2:'Copy the video\'s motion onto the start image', 3:'Put the video\'s character on a new background', 4:'Re-film the video from a new angle',
+                 5:`Video from your ${st.imgs.length} reference image${st.imgs.length > 1 ? 's' : ''} (tag them @Image1...)`};
   if (!mine.size) $('status').textContent = hints[mode()] + ' · ' + estimate();
   save();
 }
 function estimate(){
-  const m = mode(), mp = st.q / 0.4, base = (m === 4 ? 150 : m === 2 ? 60 : 30) + 13 * st.dur * mp * (m >= 2 ? 1.6 : 1);
+  const m = mode(), mp = st.q / 0.4, base = (m === 4 ? 150 : m === 2 ? 60 : 30) + 13 * st.dur * mp * (m >= 2 ? 1.6 : 1) + (m === 5 ? 6 * st.imgs.length : 0);
   return `about ${Math.round(base / 10) * 10} s`;
 }
 wireSlot($('slotStart'), 'start', 'image/*'); wireSlot($('slotEnd'), 'end', 'image/*');
@@ -560,23 +640,81 @@ $('addPanels').ondrop = e => { e.preventDefault(); $('addPanels').classList.remo
 $('boardCommon').oninput = saveBoard;
 
 // ------------------------------------------------------------------ build + run
+// date-time in output names: ComfyUI reuses numbers after files are deleted, and the browser then showed the
+// cached OLD picture for the new file (looked like the last prompt ran again)
+const stamp = () => { const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${String(d.getFullYear()).slice(2)}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; };
+// ------------------------------------------------------------------ Enhance prompt (same code in both pages)
+// Ticked: Qwen 3.5 4B (local, the "AI prompt" model) rewrites the prompt inside the SAME job - translated to English,
+// made clear and specific, tags kept - and its text replaces the prompt for every node that read it. It never waits
+// in the queue on its own. Unticked: the prompt goes in exactly as typed.
+const ENH_NODE = '992';   // PreviewAny with the rewritten text (shown on the result card)
+const enhOn = () => { try { return localStorage.getItem('studio.enhance') === '1'; } catch(e) { return false; } };
+function wireEnhance(box){
+  box.checked = enhOn();
+  box.onchange = () => { try { localStorage.setItem('studio.enhance', box.checked ? '1' : '0'); } catch(e) {}
+    document.querySelectorAll('.enhBox').forEach(b => b.checked = box.checked); };
+}
+const ENH_RULES = 'If it is not in English, translate it to English. Keep the meaning: do not add new subjects, characters or objects that were not asked for. '
+  + 'Copy these reference tags exactly where they belong: anything like <image1>, <Picture 2>, <Video 1>, "Picture 3", "image 2". '
+  + 'Reply with the rewritten prompt only - no quotes, no lists, no explanations.';
+function addEnhance(p, textNode, ask, imageRef, prefix, maxLen){
+  const L = '990', G = '991', C = '993';
+  p[L] = {class_type:'CLIPLoader', inputs:{clip_name:'qwen3.5_4b_bf16.safetensors', type:'stable_diffusion', device:'default'}};
+  p[G] = {class_type:'TextGenerate', inputs:{clip:[L, 0], prompt:ask, max_length:maxLen || 220, sampling_mode:'on',
+          'sampling_mode.temperature':0.4, 'sampling_mode.top_k':40, 'sampling_mode.top_p':0.9, 'sampling_mode.min_p':0.05,
+          'sampling_mode.repetition_penalty':1.05, 'sampling_mode.seed':Math.floor(Math.random() * 1e9), 'sampling_mode.presence_penalty':0, thinking:false}};
+  if (imageRef) p[G].inputs.image = imageRef;
+  let out = G;
+  if (prefix) { p[C] = {class_type:'StringConcatenate', inputs:{string_a:prefix, string_b:[G, 0], delimiter:' '}}; out = C; }
+  for (const [id, n] of Object.entries(p)) if (id !== G && id !== C)
+    for (const [k, v] of Object.entries(n.inputs)) if (Array.isArray(v) && String(v[0]) === String(textNode) && v[1] === 0) n.inputs[k] = [out, 0];
+  p[ENH_NODE] = {class_type:'PreviewAny', inputs:{source:[out, 0]}};
+}
+const enhText = out => { const t = out?.[ENH_NODE]?.text; return Array.isArray(t) ? t[0] : t || null; };
 const setIn = (p, id, k, v) => { if (p[id]) p[id].inputs[k] = v; };
+const VIDEO_ASK = 'Rewrite this into one clear, specific prompt for an AI video model: who/what is in the shot, what they do step by step, how the camera moves, the mood and lighting. '
+  + 'Keep lines that start with "SHOT 1:", "SHOT 2:" and "Audio:" as separate lines in the same order (rewrite their content). ' + ENH_RULES + '\n\nText: ';
+// Added images 2..10 go into the API graph here (workflow 17 has one "picture B" box). Each gets 17's clean-up
+// (alpha over white). Copy motion -> node 54 ref_image_2.., new camera -> node 109 ref_image_2..; references mode -> a
+// new MiniMaxH3ReferenceToVideo with every image, wired into mode 4's switches (121 conditioning, 129 latent), so it
+// samples with the ref2v model + 4 steps and the camera / video branch never runs.
+function addRefNodes(p, m){
+  let id = 900; const add = (class_type, inputs) => { const k = String(id++); p[k] = {class_type, inputs}; return k; };
+  const clean = name => { const li = add('LoadImage', {image:name}), sz = add('GetImageSize', {image:[li, 0]});
+    const white = add('EmptyImage', {width:[sz, 0], height:[sz, 1], batch_size:1, color:16777215});
+    const inv = add('InvertMask', {mask:[li, 1]});
+    return add('ImageCompositeMasked', {x:0, y:0, resize_source:false, destination:[white, 0], source:[li, 0], mask:[inv, 0]}); };
+  if ((m === 2 || m === 4) && st.imgs.length > 1) {
+    const node = m === 2 ? '54' : '109';
+    st.imgs.slice(1, MAX_IMGS - 1).forEach((x, i) => { p[node].inputs['ref_images.ref_image_' + (i + 2)] = [clean(x.name), 0]; });
+  }
+  if (m === 5) {
+    const r = add('MiniMaxH3ReferenceToVideo', {prompt:[N.desc, 0], width:[N.res, 0], height:[N.res, 1], length:['19', 1], ref_image_size:'match',
+                                                clip:['16', 0], vae:['17', 0], audio_vae:['18', 0]});
+    st.imgs.slice(0, MAX_IMGS).forEach((x, i) => { p[r].inputs['ref_images.ref_image_' + i] = [clean(x.name), 0]; });
+    p['121'].inputs.on_true = [r, 0]; p['129'].inputs.on_true = [r, 1];
+  }
+}
 function buildPrompt(){
   const pr = problems(); if (pr) throw new Error(pr);
-  for (const k of ['start', 'end', 'img', 'vid']) if (st[k] && !st[k].name) throw new Error('Still uploading, try again in a second.');
-  const p = JSON.parse(JSON.stringify(API)), m = mode();
+  for (const x of [st.start, st.end, st.vid, ...st.imgs]) if (x && !x.name) throw new Error('Still uploading, try again in a second.');
+  const p = JSON.parse(JSON.stringify(API)), m = mode(), gm = m === 5 ? 4 : m;   // references run on 17's mode-4 model path
   const opts = ['option1','option2','option3','option4','option5'].map(o => p[N.mode].inputs[o]);
-  setIn(p, N.mode, 'index', m); setIn(p, N.mode, 'choice', opts[m]);
+  setIn(p, N.mode, 'index', gm); setIn(p, N.mode, 'choice', opts[gm]);
   setIn(p, N.start, 'image', st.start?.name || EMPTY);
   setIn(p, N.end, 'image', st.end?.name || EMPTY);
-  setIn(p, N.picB, 'image', st.img?.name || EMPTY);
-  setIn(p, N.useB, 'value', !!st.img && (m === 2 || m === 4));
+  setIn(p, N.picB, 'image', st.imgs[0]?.name || EMPTY);
+  setIn(p, N.useB, 'value', !!st.imgs[0] && (m === 2 || m === 4));
+  addRefNodes(p, m);
   if (st.vid) setIn(p, N.video, 'file', st.vid.name);
   setIn(p, N.vstart, 'value', +$('vstart').value || 0);
   setIn(p, N.keepSound, 'value', $('keepSound').checked);
   const text = promptText();
-  if (!text && m <= 1) throw new Error('Describe the shot first.');
-  setIn(p, N.desc, 'value', resolveTags(text, videoTagWords(m), VTAGS, videoTagWhy(m)));
+  if (!text && (m <= 1 || m === 5)) throw new Error('Describe the shot first.');
+  const desc = resolveTags(text, videoTagWords(m), VTAGS, videoTagWhy(m));
+  setIn(p, N.desc, 'value', desc);
+  if ($('autoEnh').checked && desc) addEnhance(p, N.desc, VIDEO_ASK + desc, st.start ? [N.start, 0] : null, '', 360);
   setIn(p, N.loop, 'value', !!(st.start && !st.end && $('loop').checked));
   setIn(p, N.cam, 'horizontal_angle', st.cam[0]); setIn(p, N.cam, 'vertical_angle', st.cam[1]); setIn(p, N.cam, 'zoom', st.cam[2]);
   setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === st.ar)[1]); setIn(p, N.res, 'megapixels', st.q);
@@ -584,8 +722,8 @@ function buildPrompt(){
   let seed = +$('seed').value; if (!$('lockSeed').checked) { seed = Math.floor(Math.random() * 2 ** 40); $('seed').value = seed; }
   setIn(p, N.seed, 'noise_seed', seed);
   setIn(p, N.sound, 'value', st.sound);
-  setIn(p, N.save, 'filename_prefix', 'video/STUDIO/clip');
-  const what = {0:'Animate', 1:'Text', 2:'Copy motion', 3:'New background', 4:'New camera'}[m];
+  setIn(p, N.save, 'filename_prefix', `video/STUDIO/clip_${stamp()}`);
+  const what = {0:'Animate', 1:'Text', 2:'Copy motion', 3:'New background', 4:'New camera', 5:'References'}[m];
   return {p, meta:{text, what, seed, dur:st.dur, ar:st.ar, q:st.q, sound:st.sound}};
 }
 async function queue(prompt){
@@ -660,9 +798,10 @@ function shotPrompt(s, common, seed, o){
     ? `Panel ${s.panel + 1} is cut from the next one, so @End means nothing in its shot - join them or remove the tag.`
     : `Storyboard shots only know @Start (this panel) and @End (the next panel) - remove @${t}.`);
   setIn(p, N.desc, 'value', text);
+  if ($('autoEnh').checked && text) addEnhance(p, N.desc, VIDEO_ASK + text, [N.start, 0], '', 360);
   setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === o.ar)[1]); setIn(p, N.res, 'megapixels', o.q);
   setIn(p, N.dur, 'value', s.dur); setIn(p, N.seed, 'noise_seed', seed); setIn(p, N.sound, 'value', o.sound);
-  setIn(p, N.save, 'filename_prefix', 'video/STUDIO/board_shot');
+  setIn(p, N.save, 'filename_prefix', `video/STUDIO/board_shot_${stamp()}`);
   return p;
 }
 async function stitchBoard(shots){
@@ -714,8 +853,8 @@ function redoShot(r, k){
 async function trackSingle(j){
   const pend = addPending(j.meta);
   try {
-    const out = await waitFor(j.id, j.meta.what), vids = out[N.save]?.images || [];
-    for (const v of vids) addResult({...v, ...j.meta, t:Date.now()}, true);
+    const out = await waitFor(j.id, j.meta.what), vids = out[N.save]?.images || [], enhanced = enhText(out);
+    for (const v of vids) addResult({...v, ...j.meta, ...(enhanced ? {enhanced} : {}), t:Date.now()}, true);
     setStatus(vids.length ? 'Done.' : 'Finished, but no video came back.', 1);
   } catch(e) { toast(e.message); setStatus('Error - see message.', 0); }
   pend.remove(); jobDel(j.key); updateBusy();
@@ -748,7 +887,7 @@ function connect(){
 
 // ------------------------------------------------------------------ gallery
 let results = []; try { results = JSON.parse(localStorage.getItem('studio.video.results') || '[]'); } catch(e) {}
-const viewUrl = r => `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder || '')}&type=${r.type || 'output'}`;
+const viewUrl = r => `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder || '')}&type=${r.type || 'output'}${r.t ? '&t=' + r.t : ''}`;
 function addPending(meta){
   const g = $('gallery'); g.querySelector('.empty')?.remove();
   const d = document.createElement('div'); d.className = 'card pending'; d.innerHTML = `<div><div class="spin"></div>${meta.what} · ${meta.dur} s · ${meta.ar}</div>`;
@@ -762,17 +901,22 @@ async function lastFrame(r){
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
 function addResult(r, isNew){
+  const vk = (r.subfolder || '') + '/' + r.filename;
+  if (isNew) { results = results.filter(x => x !== r && (x.subfolder || '') + '/' + x.filename !== vk); $('gallery').querySelectorAll('.card[data-k]').forEach(c => { if (c.dataset.k === vk) c.remove(); }); }
   if (isNew) { results.unshift(r); results = results.slice(0, 200); try { localStorage.setItem('studio.video.results', JSON.stringify(results)); } catch(e) {} }
   const g = $('gallery'); g.querySelector('.empty')?.remove();
-  const c = document.createElement('div'); c.className = 'card';
+  const c = document.createElement('div'); c.className = 'card'; c.dataset.k = vk;
   const ref = (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]';
-  c.innerHTML = `<video src="${viewUrl(r)}" controls loop playsinline preload="metadata"></video>
-    <div class="meta" title="${(r.text||'').replace(/"/g,'&quot;')}">${r.what || ''} · ${r.dur || '?'} s · ${r.ar || ''} · ${r.text || ''}</div>
+  c.innerHTML = `<button class="ck" title="Select (Shift = range)">✓</button><video src="${viewUrl(r)}" controls loop playsinline preload="metadata"></video>
+    <div class="meta" title="${escHTML(r.enhanced ? 'Enhanced: ' + r.enhanced : r.text || '')}">${r.what || ''} · ${r.dur || '?'} s · ${r.ar || ''}${r.enhanced ? ' · ✨' : ''} · ${escHTML(r.text || '')}</div>
     <div class="acts"><a href="${viewUrl(r)}" download="${r.filename}">⬇ Download</a><button data-a="use">Use as video</button>
     <button data-a="cont">Continue from last frame</button><button data-a="reuse">Reuse</button><button data-a="del" style="margin-left:auto;color:#c0392b">🗑 Delete</button></div>
     ${r.board ? `<div class="shotsrow">Redo shot: ${r.board.shots.map((s, k) => `<button data-redo="${k}" title="${(s.text || '').replace(/"/g,'&quot;')}">${k+1}</button>`).join('')}</div>` : ''}`;
   c.querySelectorAll('[data-redo]').forEach(b => b.onclick = () => redoShot(r, +b.dataset.redo));
-  c.querySelector('[data-a=del]').onclick = () => deleteResult(r, c);
+  c.querySelector('[data-a=del]').onclick = () => deleteResults([r]);
+  c.querySelector('.ck').onclick = e => { e.stopPropagation(); toggleSel(r, e.shiftKey); };
+  c.querySelector('.meta').onclick = e => { if (e.shiftKey || e.ctrlKey || e.metaKey || sel.size) toggleSel(r, e.shiftKey); };
+  if (sel.has(vk)) c.classList.add('sel');
   c.querySelector('[data-a=use]').onclick = () => { st.vid = {url:viewUrl(r), name:ref, video:true}; render(); toast('Added as the video. Pick what to do with it.', true); };
   c.querySelector('[data-a=cont]').onclick = async () => {
     try { const b = await lastFrame(r); st.start = {url:URL.createObjectURL(b), name:null, video:false}; st.end = null; st.vid = null; render();
@@ -792,27 +936,86 @@ function addResult(r, isNew){
 // Delete = move the file(s) to ComfyUI\output\_trash (same route as the image page). A storyboard card also
 // trashes its shot clips, unless another card (e.g. a "Redo shot" version) still uses them.
 const fileKey = f => (f.subfolder || '') + '/' + f.filename;
-async function deleteResult(r, card){
-  if (!confirm(`Delete this video?\n${r.filename}\n(It moves to ComfyUI\\output\\_trash, so you can still get it back.)`)) return;
-  const others = results.filter(x => x !== r);
+async function deleteResults(list, skipConfirm){
+  if (!list.length) return;
+  if (!skipConfirm && !confirm(list.length === 1 ? `Delete this video?\n${list[0].filename}\n(It moves to ComfyUI\\output\\_trash, so you can still get it back.)`
+                                                  : `Delete ${list.length} videos?\n(They move to ComfyUI\\output\\_trash, so you can still get them back.)`)) return;
+  const gone = new Set(list), others = results.filter(x => !gone.has(x));
   const used = new Set(others.flatMap(x => [x, ...(x.board?.shots || []).map(s => s.clip).filter(Boolean)]).map(fileKey));
-  const files = [r, ...(r.board?.shots || []).map(s => s.clip).filter(Boolean)]
-    .filter((f, i, a) => !used.has(fileKey(f)) && a.findIndex(g => fileKey(g) === fileKey(f)) === i)
+  const files = list.flatMap(r => [r, ...(r.board?.shots || []).map(s => s.clip).filter(Boolean)])
+    .filter((f, i, all) => !used.has(fileKey(f)) && all.findIndex(g => fileKey(g) === fileKey(f)) === i)
     .map(f => ({filename:f.filename, subfolder:f.subfolder || '', type:f.type || 'output'}));
+  const keys = new Set(list.map(fileKey)), cards = [...$('gallery').querySelectorAll('.card[data-k]')].filter(c => keys.has(c.dataset.k));
+  for (const c of cards) { const v = c.querySelector('video'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); } }   // let go of the files first (Windows locks)
   let note = '';
-  const v = card.querySelector('video'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); }  // let go of the file first (Windows locks)
   try {
     const res = await fetch('/slot_studio/trash', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({files})});
-    if (!res.ok) note = ' File kept on disk: restart ComfyUI once to enable the trash.';
-  } catch(e) { note = ' File kept on disk: ' + e.message; }
+    if (!res.ok) note = ' Files kept on disk: restart ComfyUI once to enable the trash.';
+  } catch(e) { note = ' Files kept on disk: ' + e.message; }
   results = others; try { localStorage.setItem('studio.video.results', JSON.stringify(results)); } catch(e) {}
-  card.remove(); if (!results.length) renderGallery();
-  toast('Deleted.' + note, !note);
+  cards.forEach(c => c.remove()); keys.forEach(k => sel.delete(k)); renderSel();
+  if (!results.length) renderGallery();
+  toast((list.length === 1 ? 'Deleted.' : `Deleted ${list.length}.`) + note, !note);
 }
+// ---- selection (same as the image page): checkbox, Shift = range, drag a box on empty space, Ctrl+A, Delete key
+const sel = new Set(); let anchor = null;
+function toggleSel(r, range){
+  const k = fileKey(r);
+  if (range && anchor) {
+    const keys = results.map(fileKey), a = keys.indexOf(anchor), b = keys.indexOf(k);
+    if (a >= 0 && b >= 0) { for (let i = Math.min(a, b); i <= Math.max(a, b); i++) sel.add(keys[i]); renderSel(); return; }
+  }
+  sel.has(k) ? sel.delete(k) : sel.add(k); anchor = k; renderSel();
+}
+function renderSel(){
+  for (const c of $('gallery').querySelectorAll('.card[data-k]')) c.classList.toggle('sel', sel.has(c.dataset.k));
+  $('gallery').classList.toggle('selecting', sel.size > 0);
+  $('selBar').classList.toggle('hide', !sel.size); $('selN').textContent = `${sel.size} selected`;
+  let hintOff = false; try { hintOff = localStorage.getItem('studio.hintOff') === '1'; } catch(e) {}
+  $('selHint').classList.toggle('hide', !sel.size || hintOff);
+  $('gcount').textContent = results.length ? `${results.length} video${results.length > 1 ? 's' : ''}` : '';
+}
+const selected = () => results.filter(r => sel.has(fileKey(r)));
+$('selX').onclick = () => { sel.clear(); renderSel(); };
+$('selAll').onclick = $('selAllTop').onclick = () => { results.forEach(r => sel.add(fileKey(r))); renderSel(); };
+$('hintX').onclick = () => { try { localStorage.setItem('studio.hintOff', '1'); } catch(e) {} renderSel(); };
+$('selDl').onclick = async () => { for (const r of selected()) { const a = document.createElement('a'); a.href = viewUrl(r); a.download = r.filename; document.body.appendChild(a); a.click(); a.remove(); await new Promise(x => setTimeout(x, 300)); } };
+$('selDel').onclick = () => deleteResults(selected());
+(() => {
+  const gal = $('gallery'); let box = null, start = null, base = null;
+  gal.addEventListener('mousedown', e => {
+    if (e.button !== 0 || e.target.closest('.card') || e.target.closest('button')) return;
+    const r = gal.getBoundingClientRect();
+    start = {x:e.clientX - r.left + gal.scrollLeft, y:e.clientY - r.top + gal.scrollTop};
+    base = (e.shiftKey || e.ctrlKey) ? new Set(sel) : new Set();
+    box = document.createElement('div'); box.className = 'marquee'; gal.appendChild(box);
+  });
+  window.addEventListener('mousemove', e => {
+    if (!box) return;
+    const r = gal.getBoundingClientRect(), x = e.clientX - r.left + gal.scrollLeft, y = e.clientY - r.top + gal.scrollTop;
+    const L = Math.min(x, start.x), T = Math.min(y, start.y), W = Math.abs(x - start.x), H = Math.abs(y - start.y);
+    Object.assign(box.style, {left:L + 'px', top:T + 'px', width:W + 'px', height:H + 'px'});
+    if (W < 4 && H < 4) return;
+    sel.clear(); base.forEach(k => sel.add(k));
+    for (const c of gal.querySelectorAll('.card[data-k]')) {
+      const cr = c.getBoundingClientRect(), cl = cr.left - r.left + gal.scrollLeft, ct = cr.top - r.top + gal.scrollTop;
+      if (cl < L + W && cl + cr.width > L && ct < T + H && ct + cr.height > T) sel.add(c.dataset.k);
+    }
+    renderSel();
+  });
+  window.addEventListener('mouseup', () => { if (box) { box.remove(); box = null; } });
+})();
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); results.forEach(r => sel.add(fileKey(r))); renderSel(); }
+  if (e.key === 'Escape' && sel.size) { sel.clear(); renderSel(); }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && sel.size) { e.preventDefault(); deleteResults(selected()); }
+});
 function renderGallery(){
   $('gallery').innerHTML = '';
   if (!results.length) $('gallery').innerHTML = '<div class="empty"><b>Your videos appear here</b>Add a start image (or nothing for text-to-video), describe the shot, press Generate.<br>Add a video under "Add media" to copy its motion, change its background or re-film it.</div>';
   for (const r of results) addResult(r, false);
+  renderSel();
 }
 $('clearGallery').onclick = () => { if (!confirm('Clear the list? (files stay in ComfyUI\\output\\video\\STUDIO)')) return; results = []; localStorage.removeItem('studio.video.results'); renderGallery(); };
 
@@ -820,6 +1023,7 @@ $('clearGallery').onclick = () => { if (!confirm('Clear the list? (files stay in
   try { API = await (await fetch('video_api.json', {cache:'no-store'})).json(); }
   catch(e) { toast('Could not load the video workflow: ' + e.message); }
   addShot(); try { loadBoard(JSON.parse(localStorage.getItem(BOARD_KEY) || 'null')); } catch(e) {}
+  restoreRefs(); wireEnhance($('autoEnh'));
   tagBox($('boardCommon'), () => [{tag:'Start', sub:'each shot\'s own panel', ok:true}, {tag:'End', sub:'the next panel (joined shots)', ok:true}]);
   render(); renderGallery(); connect();
   const left = jobsGet();   // jobs still running from before a page switch / reload

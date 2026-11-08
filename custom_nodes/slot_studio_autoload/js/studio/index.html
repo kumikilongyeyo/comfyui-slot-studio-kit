@@ -91,12 +91,12 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .card:hover .meta{opacity:1}
 .card.pending{display:flex;align-items:center;justify-content:center;color:var(--dim);border:1.5px dashed var(--line);background:var(--panel)}
 .marquee{position:absolute;border:1px solid var(--accent);background:#2563eb1f;pointer-events:none;z-index:5}
-.selbar{position:fixed;left:calc(50% + 200px);bottom:18px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 8px;box-shadow:0 10px 30px #0002;z-index:30}
+.selbar{position:fixed;left:calc(50% + 200px);bottom:18px;transform:translateX(-50%);display:flex;white-space:nowrap;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:6px 8px;box-shadow:0 10px 30px #0002;z-index:30}
 .selbar .n{font-weight:600;font-size:13px;padding:0 6px}
 .selbar button{background:var(--chip);border:1px solid var(--line);border-radius:9px;padding:6px 10px;font-size:12.5px}
 .selbar button.del{color:var(--bad)}
 .selbar button.x{background:none;border:0;font-size:16px;color:var(--dim)}
-.selhint{position:fixed;left:calc(50% + 200px);bottom:68px;transform:translateX(-50%);background:var(--soft);border:1px solid #c9d8fb;color:#1e3a8a;border-radius:10px;padding:6px 10px;font-size:12px;z-index:30;display:flex;gap:10px;align-items:center}
+.selhint{position:fixed;left:calc(50% + 200px);bottom:68px;transform:translateX(-50%);white-space:nowrap;background:var(--soft);border:1px solid #c9d8fb;color:#1e3a8a;border-radius:10px;padding:6px 10px;font-size:12px;z-index:30;display:flex;gap:10px;align-items:center}
 .selhint button{background:none;border:0;color:#1e3a8a}
 .tsize{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:12px}
 .tsize input{width:110px}
@@ -135,11 +135,13 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .tiles{display:flex;gap:8px;flex-wrap:wrap}
 .tiles .slot{width:96px;height:96px;aspect-ratio:auto;font-size:11px;border-radius:10px}
 .tiles .slot .cap{font-size:10px}
+.tiles .slot.addref{border-style:dashed;color:var(--accent)}
 .pbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px}
 .pbox:focus-within{border-color:var(--accent)}
 .pbox textarea{border:0;background:none;min-height:96px;padding:4px}
 .pbox textarea:focus{outline:none}
-.pbar{display:flex;align-items:center;gap:8px;padding-top:6px}
+.pbar{display:flex;align-items:center;gap:8px;padding-top:6px;flex-wrap:wrap}
+.enh{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--dim);cursor:pointer;white-space:nowrap}
 .avoid{margin-top:8px;display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px}
 .avoid input{flex:1}
 .brow{display:flex;gap:8px;align-items:center}
@@ -166,7 +168,10 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
       <div class="tiles">
         <div class="slot" id="slot1"><div>＋<br>Picture 1<br><small>to edit</small></div></div>
         <div class="slot" id="slot2"><div>＋<br>Picture 2<br><small>style / object</small></div></div>
+        <div id="moreSlots" style="display:contents"></div>
+        <div class="slot addref" id="addRef" title="Add more reference pictures (up to 10) - click, drop or paste"><div><b style="font-size:20px">＋</b><br><span id="addRefN"></span></div></div>
       </div>
+      <div class="hint hide" id="refLimit"></div>
       <div class="row" style="margin-top:8px;flex-wrap:wrap">
         <button class="ghost" id="paintBtn" disabled>Paint area to change</button>
         <button class="ghost hide" id="clearMask">Clear paint</button>
@@ -179,7 +184,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
       <div class="lbl"><span id="promptLbl">Prompt</span></div>
       <div class="pbox">
         <textarea id="prompt" placeholder="Describe what you want..."></textarea>
-        <div class="pbar"><button class="ghost" id="tagBtn" title="Tag a reference picture (or just type @)">@ Tag</button><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt">✨ AI prompt</button><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
+        <div class="pbar"><button class="ghost" id="tagBtn" title="Tag a reference picture (or just type @)">@ Tag</button><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt now (you can edit it)">✨ AI prompt</button><label class="enh" title="On: every Generate rewrites the prompt first (clearer, translated to English, tags kept). Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> Enhance prompt</label><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
       </div>
       <div class="brow" style="margin-top:10px">
         <div class="stepper" title="Number of images (1-12)"><button id="cMinus">−</button><span id="count">1</span><button id="cPlus">+</button></div>
@@ -276,7 +281,7 @@ const CAMS = [['Front',0,0],['¾ right',45,0],['Right',90,0],['Back',180,0],['Le
 
 // ------------------------------------------------------------------ state
 const st = { tab:'create', model:'qwen21', style:'None', aspect:'1:1', size:1.0, count:1,
-             pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set(), running:null };
+             pic1:null, pic2:null, more:[], painted:false, available:new Set(), loras:new Set(), running:null };
 const $ = id => document.getElementById(id);
 // clientId stays the same for this browser tab (sessionStorage), so after Video -> Image the websocket gets this
 // page's progress again. ComfyUI keeps one socket per clientId, so two tabs must not share it.
@@ -284,7 +289,7 @@ const JOBS_KEY = 'studio.jobs.image';
 let API = null, clientId = (() => { try { let c = sessionStorage.getItem('studio.cid.image');
   if (!c) { c = 'studio-' + Math.random().toString(36).slice(2); sessionStorage.setItem('studio.cid.image', c); } return c; }
   catch(e) { return 'studio-' + Math.random().toString(36).slice(2); } })();
-try { Object.assign(st, JSON.parse(localStorage.getItem('studio.prefs') || '{}'), {running:null, pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set()}); } catch(e) {}
+try { Object.assign(st, JSON.parse(localStorage.getItem('studio.prefs') || '{}'), {running:null, pic1:null, pic2:null, more:[], painted:false, available:new Set(), loras:new Set()}); } catch(e) {}
 try { if (!localStorage.getItem('studio.q21default')) { st.model = 'qwen21'; st.style = 'None'; localStorage.setItem('studio.q21default', '1'); } } catch(e) {}
 const savePrefs = () => { try { localStorage.setItem('studio.prefs', JSON.stringify({tab:st.tab, model:st.model, style:st.style, aspect:st.aspect, size:st.size, count:st.count})); } catch(e) {} };
 
@@ -293,7 +298,7 @@ const model = () => MODELS.find(m => m.id === st.model);
 // ------------------------------------------------------------------ @ tags (same code in index.html + video.html)
 // Type @ in a prompt box to tag a reference (@Picture1, @Start, ...). The box keeps the readable tag and
 // highlights it; on Generate, resolveTags() swaps each tag for the word the chosen model knows that picture by.
-const TAG_RE = /@([A-Za-z]+\d?)\b/g;
+const TAG_RE = /@([A-Za-z]+\d*)\b/g;
 const TAG_BOXES = new Set();
 const escHTML = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
 const repaintTags = () => TAG_BOXES.forEach(b => b.isConnected ? b._tagPaint() : TAG_BOXES.delete(b));
@@ -460,28 +465,57 @@ function renderAll(){
   $('tagBtn').classList.toggle('hide', st.tab !== 'edit'); repaintTags();
   $('restyleWarn').classList.toggle('hide', !(st.tab === 'edit' && model().edit === 'restyle'));
   $('paintBtn').disabled = !st.pic1;
+  { const lim = refLimit(model()), n = refCount();
+    $('refLimit').textContent = n > lim ? (lim === 1 ? `${model().name} only uses Picture 1 (restyle).` : `${model().name} uses pictures 1-${lim}; the rest are skipped. Qwen-Image 2.1 and Klein take all ${MAX_REFS}.`) : '';
+    $('refLimit').classList.toggle('hide', !(st.tab === 'edit' && n > lim)); }
   $('count').textContent = st.count;
   renderModels(); renderStyles(); renderAspects(); renderSizes(); renderCam(); savePrefs();
 }
 
 // ------------------------------------------------------------------ picture slots
+// Picture 1 = the picture you edit, Picture 2..10 = references. 3..10 live in st.more (same shape as pic1/pic2).
+// What each model can take: Qwen-Image 2.1 + Klein all 10, Qwen Edit 3 (its encoder has image1-3), SDXL/Z-Image only 1.
+const MAX_REFS = 10;
+const REFS_KEY = 'studio.refs.image';
+const refLimit = m => ({qwen21:10, klein:10, qwen:3}[m.family] || 1);
+const refCount = () => (st.pic1 ? 1 : 0) + (st.pic2 ? 1 : 0) + st.more.length;
+const getRef = key => typeof key === 'number' ? st.more[key] : st[key];
+function setRef(key, v){ if (typeof key === 'number') { if (v) st.more[key] = v; else st.more.splice(key, 1); } else st[key] = v; }
+function saveRefs(){
+  try { localStorage.setItem(REFS_KEY, JSON.stringify({pic1:st.pic1?.name || null, pic2:st.pic2?.name || null, more:st.more.map(p => p.name).filter(Boolean)})); } catch(e) {}
+}
+// where an added picture goes: the slot under the mouse, else the first empty one
+function nextKey(){ if (!st.pic1) return 'pic1'; if (!st.pic2) return 'pic2'; return st.more.length < MAX_REFS - 2 ? st.more.length : null; }
 function setupSlot(el, key){
   const pick = () => { if (painting && key==='pic1') return; const i=document.createElement('input'); i.type='file'; i.accept='image/*'; i.onchange=()=>i.files[0]&&loadFile(key,i.files[0]); i.click(); };
-  el.addEventListener('click', e => { if (e.target.classList.contains('x')) return; if (!st[key]) pick(); });
+  el.addEventListener('click', e => { if (e.target.classList.contains('x')) return; if (!getRef(key)) pick(); });
   el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
   el.addEventListener('dragleave', () => el.classList.remove('drag'));
   el.addEventListener('drop', e => { e.preventDefault(); el.classList.remove('drag');
     const f = e.dataTransfer.files[0]; if (f) return loadFile(key, f);
     const url = e.dataTransfer.getData('text/uri-list'); if (url) loadUrl(key, url); });
   el.addEventListener('dblclick', pick);
+  el.addEventListener('mouseenter', () => pasteTarget = key); el.addEventListener('mouseleave', () => pasteTarget = null);
 }
-let pasteTarget = 'pic1';
+function addFiles(files){
+  files = [...files].filter(f => f.type.startsWith('image/'));
+  for (const f of files) { const k = nextKey(); if (k == null) { toast(`Up to ${MAX_REFS} pictures.`); break; } loadFile(k, f); }
+}
+let pasteTarget = null;
 document.addEventListener('paste', e => {
-  const f = [...(e.clipboardData?.items||[])].find(i => i.type.startsWith('image/'))?.getAsFile(); if (!f) return;
+  if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && !e.clipboardData?.files?.length) return;
+  const fs = [...(e.clipboardData?.items||[])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean); if (!fs.length) return;
+  e.preventDefault();
   if (st.tab !== 'edit') { st.tab = 'edit'; renderAll(); }
-  loadFile(st.pic1 && !st.pic2 && pasteTarget==='pic2' ? 'pic2' : (st.pic1 ? (pasteTarget) : 'pic1'), f);
+  if (pasteTarget != null && fs.length === 1) return loadFile(pasteTarget, fs[0]);   // over a slot = replace that one
+  addFiles(fs);
 });
-$('slot1').addEventListener('mouseenter', ()=>pasteTarget='pic1'); $('slot2').addEventListener('mouseenter', ()=>pasteTarget='pic2');
+$('addRef').onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = () => addFiles(i.files); i.click(); };
+$('addRef').ondragover = e => { e.preventDefault(); $('addRef').classList.add('drag'); };
+$('addRef').ondragleave = () => $('addRef').classList.remove('drag');
+$('addRef').ondrop = e => { e.preventDefault(); $('addRef').classList.remove('drag');
+  if (e.dataTransfer.files.length) return addFiles(e.dataTransfer.files);
+  const url = e.dataTransfer.getData('text/uri-list'), k = nextKey(); if (url && k != null) loadUrl(k, url); };
 
 async function upload(blob, name){
   const fd = new FormData(); fd.append('image', blob, name); fd.append('subfolder', 'studio'); fd.append('type', 'input'); fd.append('overwrite', 'true');
@@ -491,40 +525,79 @@ async function upload(blob, name){
 async function loadFile(key, file){
   const url = URL.createObjectURL(file);
   const img = await loadImg(url);
-  st[key] = {img, url, file, name:null};
+  const p = {img, url, file, name:null}; setRef(key, p);
   if (key==='pic1') clearPaint();
   drawSlot(key);
-  try { st[key].name = await upload(file, 'img_' + Date.now() + '.png'); } catch(e) { toast(e.message); }
+  try { p.name = await upload(file, 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) + '.png'); saveRefs(); } catch(e) { toast(e.message); }
 }
 async function loadUrl(key, url, ref){
-  const img = await loadImg(url); st[key] = {img, url, file:null, name:ref || null};
+  const img = await loadImg(url); const p = {img, url, file:null, name:ref || null}; setRef(key, p);
   if (key==='pic1') clearPaint(); drawSlot(key);
-  if (!ref) { const b = await (await fetch(url)).blob(); st[key].name = await upload(b, 'img_' + Date.now() + '.png'); }
+  if (!ref) { const b = await (await fetch(url)).blob(); p.name = await upload(b, 'img_' + Date.now() + '.png'); }
+  saveRefs();
 }
 const loadImg = url => new Promise((res, rej) => { const i = new Image(); i.crossOrigin='anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = url; });
+// a saved name is either an upload in input/ or a gallery picture "STUDIO/x.png [output]"
+const refUrl = name => { const out = / \[output\]$/.test(name), n = name.replace(/ \[\w+\]$/, ''), i = n.lastIndexOf('/');
+  return `/view?filename=${encodeURIComponent(n.slice(i + 1))}&subfolder=${encodeURIComponent(i < 0 ? '' : n.slice(0, i))}&type=${out ? 'output' : 'input'}`; };
+async function restoreRefs(){
+  let s = null; try { s = JSON.parse(localStorage.getItem(REFS_KEY) || 'null'); } catch(e) {}
+  if (!s) return;
+  const jobs = [['pic1', s.pic1], ['pic2', s.pic2], ...(s.more || []).map(n => ['more', n])].filter(x => x[1]);
+  st.more = [];
+  for (const [k, n] of jobs) { try { await loadUrl(k === 'more' ? st.more.length : k, refUrl(n), n); } catch(e) {} }   // a deleted file just stays empty
+  if (!st.pic2 && st.more.length) { st.pic2 = st.more.shift(); drawSlot('pic2'); }
+  saveRefs();
+}
+function removeRef(key){
+  if (key === 'pic1') { st.pic1 = null; clearPaint(); stopPaint(); }
+  else if (key === 'pic2') st.pic2 = st.more.length ? st.more.shift() : null;   // the next reference moves up
+  else st.more.splice(key, 1);
+  saveRefs(); drawSlot('pic1'); drawSlot('pic2');
+}
 function drawSlot(key){
+  if (typeof key === 'number') return drawMore();
   const el = $(key === 'pic1' ? 'slot1' : 'slot2'), p = st[key];
-  if (!p) { el.innerHTML = key==='pic1' ? '<div>＋<br>Picture 1<br><small>to edit</small></div>' : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; renderAll(); return; }
-  el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>`;
-  if (key === 'pic1') el.appendChild(maskCanvas);
-  el.querySelector('.x').onclick = e => { e.stopPropagation(); st[key] = null; if (key==='pic1') { clearPaint(); stopPaint(); } drawSlot(key); };
+  if (!p) { el.innerHTML = key==='pic1' ? '<div>＋<br>Picture 1<br><small>to edit</small></div>' : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; }
+  else {
+    el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>`;
+    if (key === 'pic1') el.appendChild(maskCanvas);
+    el.querySelector('.x').onclick = e => { e.stopPropagation(); removeRef(key); };
+  }
+  drawMore();
+}
+function drawMore(){
+  const box = $('moreSlots'); box.innerHTML = '';
+  st.more.forEach((p, i) => {
+    const d = document.createElement('div'); d.className = 'slot';
+    d.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${i + 3}</span>`;
+    d.querySelector('.x').onclick = e => { e.stopPropagation(); removeRef(i); };
+    setupSlot(d, i); box.appendChild(d);
+  });
+  const n = refCount();
+  $('addRef').classList.toggle('hide', !st.pic1 || !st.pic2 || n >= MAX_REFS);
+  $('addRefN').textContent = `${n}/${MAX_REFS}`;
   renderAll();
 }
 setupSlot($('slot1'), 'pic1'); setupSlot($('slot2'), 'pic2');
 tagBox($('prompt'), () => {
-  const no = st.tab !== 'edit' ? 'only in "Edit picture"' : model().edit === 'restyle' ? 'this model can\'t read tags' : null;
-  return [{tag:'Picture1', sub:'the picture you edit', thumb:st.pic1?.url, ok:!no && !!st.pic1, why:no},
-          {tag:'Picture2', sub:'style / object', thumb:st.pic2?.url, ok:!no && !!st.pic2, why:no}];
+  const no = st.tab !== 'edit' ? 'only in "Edit picture"' : model().edit === 'restyle' ? 'this model can\'t read tags' : null, lim = refLimit(model());
+  const all = [st.pic1, st.pic2, ...st.more];
+  const n = Math.max(2, all.filter(Boolean).length);
+  return Array.from({length:n}, (_, i) => ({tag:'Picture' + (i + 1), sub:i === 0 ? 'the picture you edit' : i === 1 ? 'style / object' : 'reference',
+    thumb:all[i]?.url, ok:!no && !!all[i] && i < lim, why:no || (all[i] && i >= lim ? `${model().name} uses only ${lim}` : null)}));
 });
 $('tagBtn').onclick = () => { const ta = $('prompt'), c = ta.selectionStart ?? ta.value.length, v = ta.value;
   const pre = c && !/\s/.test(v[c - 1]) ? ' @' : '@'; ta.value = v.slice(0, c) + pre + v.slice(c); ta.focus();
   ta.setSelectionRange(c + pre.length, c + pre.length); ta.dispatchEvent(new Event('input')); };
-// Each edit model knows its two pictures by a different name (from their text encoders):
+// Each edit model knows its pictures by a different name (from their text encoders):
 // Qwen Edit 2511 "Picture N" (TextEncodeQwenImageEditPlus), Qwen-Image 2.1 "<imageN>" (qwen_image21.py), Klein = order only.
 function imageTagWords(m, edit){
   if (!edit) return null;
-  const w = {qwen:['Picture 1', 'Picture 2'], qwen21:['<image1>', '<image2>'], klein:['image 1', 'image 2']}[m.family];
-  return w ? {picture1:w[0], picture2:st.pic2 ? w[1] : null} : null;
+  const fmt = {qwen:n => 'Picture ' + n, qwen21:n => `<image${n}>`, klein:n => 'image ' + n}[m.family]; if (!fmt) return null;
+  const all = [st.pic1, st.pic2, ...st.more], w = {};
+  all.forEach((p, i) => { if (p && i < refLimit(m)) w['picture' + (i + 1)] = fmt(i + 1); });
+  return w;
 }
 
 // ------------------------------------------------------------------ mask painting (precise edit)
@@ -599,7 +672,60 @@ $('enhance').onclick = async () => {
 };
 
 // ------------------------------------------------------------------ build + run
+// date-time in output names: ComfyUI reuses numbers after files are deleted, and the browser then showed the
+// cached OLD picture for the new file (looked like the last prompt ran again)
+const stamp = () => { const d = new Date(), z = n => String(n).padStart(2, '0');
+  return `${String(d.getFullYear()).slice(2)}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; };
+// ------------------------------------------------------------------ Enhance prompt (same code in both pages)
+// Ticked: Qwen 3.5 4B (local, the "AI prompt" model) rewrites the prompt inside the SAME job - translated to English,
+// made clear and specific, tags kept - and its text replaces the prompt for every node that read it. It never waits
+// in the queue on its own. Unticked: the prompt goes in exactly as typed.
+const ENH_NODE = '992';   // PreviewAny with the rewritten text (shown on the result card)
+const enhOn = () => { try { return localStorage.getItem('studio.enhance') === '1'; } catch(e) { return false; } };
+function wireEnhance(box){
+  box.checked = enhOn();
+  box.onchange = () => { try { localStorage.setItem('studio.enhance', box.checked ? '1' : '0'); } catch(e) {}
+    document.querySelectorAll('.enhBox').forEach(b => b.checked = box.checked); };
+}
+const ENH_RULES = 'If it is not in English, translate it to English. Keep the meaning: do not add new subjects, characters or objects that were not asked for. '
+  + 'Copy these reference tags exactly where they belong: anything like <image1>, <Picture 2>, <Video 1>, "Picture 3", "image 2". '
+  + 'Reply with the rewritten prompt only - no quotes, no lists, no explanations.';
+function addEnhance(p, textNode, ask, imageRef, prefix, maxLen){
+  const L = '990', G = '991', C = '993';
+  p[L] = {class_type:'CLIPLoader', inputs:{clip_name:'qwen3.5_4b_bf16.safetensors', type:'stable_diffusion', device:'default'}};
+  p[G] = {class_type:'TextGenerate', inputs:{clip:[L, 0], prompt:ask, max_length:maxLen || 220, sampling_mode:'on',
+          'sampling_mode.temperature':0.4, 'sampling_mode.top_k':40, 'sampling_mode.top_p':0.9, 'sampling_mode.min_p':0.05,
+          'sampling_mode.repetition_penalty':1.05, 'sampling_mode.seed':Math.floor(Math.random() * 1e9), 'sampling_mode.presence_penalty':0, thinking:false}};
+  if (imageRef) p[G].inputs.image = imageRef;
+  let out = G;
+  if (prefix) { p[C] = {class_type:'StringConcatenate', inputs:{string_a:prefix, string_b:[G, 0], delimiter:' '}}; out = C; }
+  for (const [id, n] of Object.entries(p)) if (id !== G && id !== C)
+    for (const [k, v] of Object.entries(n.inputs)) if (Array.isArray(v) && String(v[0]) === String(textNode) && v[1] === 0) n.inputs[k] = [out, 0];
+  p[ENH_NODE] = {class_type:'PreviewAny', inputs:{source:[out, 0]}};
+}
+const enhText = out => { const t = out?.[ENH_NODE]?.text; return Array.isArray(t) ? t[0] : t || null; };
 const setIn = (p, id, k, v) => { if (p[id]) p[id].inputs[k] = v; };
+// Pictures 3..10 are added to the API graph here (workflow 16 itself only has 2 picture boxes). Each one gets the same
+// clean-up as Picture 2 (alpha over white, scaled), then: Qwen-Image 2.1 -> images.image_N on the 2-picture encoder (130),
+// Qwen Edit -> image3 on 92/94, Klein -> one more ReferenceLatent pair chained after 64/65 (switches 66/67 then use the end).
+function addExtraRefs(p, m){
+  const extra = st.more.slice(0, Math.max(0, refLimit(m) - 2)); if (!extra.length) return;
+  if (extra.some(x => !x.name)) throw new Error('A reference picture is still uploading, try again in a second.');
+  let id = 900, posK = '64', negK = '65';
+  const add = (class_type, inputs) => { const k = String(id++); p[k] = {class_type, inputs}; return k; };
+  extra.forEach((r, i) => {
+    const n = i + 3, li = add('LoadImage', {image:r.name}), sz = add('GetImageSize', {image:[li, 0]});
+    const white = add('EmptyImage', {width:[sz, 0], height:[sz, 1], batch_size:1, color:16777215});
+    const inv = add('InvertMask', {mask:[li, 1]});
+    const comp = add('ImageCompositeMasked', {x:0, y:0, resize_source:false, destination:[white, 0], source:[li, 0], mask:[inv, 0]});
+    const sc = add('ImageScaleToTotalPixels', {upscale_method:'lanczos', megapixels:Math.min(st.size, 1), resolution_steps:16, image:[comp, 0]});
+    if (m.family === 'qwen21' && p['130']) p['130'].inputs['images.image_' + n] = [sc, 0];
+    if (m.family === 'qwen' && p['92']) { p['92'].inputs.image3 = [sc, 0]; p['94'].inputs.image3 = [sc, 0]; }
+    if (m.family === 'klein') { const enc = add('VAEEncode', {pixels:[sc, 0], vae:['49', 0]});
+      posK = add('ReferenceLatent', {conditioning:[posK, 0], latent:[enc, 0]}); negK = add('ReferenceLatent', {conditioning:[negK, 0], latent:[enc, 0]}); }
+  });
+  if (m.family === 'klein') { p['66'].inputs.on_true = [posK, 0]; p['67'].inputs.on_true = [negK, 0]; }
+}
 async function buildPrompt(){
   const p = JSON.parse(JSON.stringify(API)), m = model(), edit = st.tab === 'edit';
   if (edit && !st.pic1) throw new Error('Add Picture 1 first (drag, paste or click the box).');
@@ -607,20 +733,27 @@ async function buildPrompt(){
   setIn(p, N.model, 'choice', MODEL_OPTS[m.idx]); setIn(p, N.model, 'index', m.idx);
   setIn(p, N.task, 'choice', TASK_OPTS[edit ? 1 : 0]); setIn(p, N.task, 'index', edit ? 1 : 0);
   let text = $('prompt').value.trim();
-  if (/@picture[12]\b/i.test(text)) {
-    const words = imageTagWords(m, edit);
-    text = resolveTags(text, words || {}, ['picture1', 'picture2'], t =>
-      !edit ? `@${t} only works in "Edit picture" (switch the tab, add the picture).`
-      : !words ? `${m.name} can't read @tags - pick Qwen-Image 2.1, FLUX.2 Klein or Qwen Edit, or remove @${t}.`
-      : `You tagged @${t}, but Picture 2 is empty - add it or remove the tag.`);
+  if (/@picture\d+\b/i.test(text)) {
+    const words = imageTagWords(m, edit), lim = refLimit(m);
+    text = resolveTags(text, words || {}, Array.from({length:MAX_REFS}, (_, i) => 'picture' + (i + 1)), t => {
+      const n = +t.replace(/\D/g, '');
+      return !edit ? `@${t} only works in "Edit picture" (switch the tab, add the picture).`
+        : !words ? `${m.name} can't read @tags - pick Qwen-Image 2.1, FLUX.2 Klein or Qwen Edit, or remove @${t}.`
+        : n > lim ? `${m.name} takes only ${lim} pictures - remove @${t} or pick Qwen-Image 2.1 / Klein (up to 10).`
+        : `You tagged @${t}, but Picture ${n} is empty - add it or remove the tag.`; });
   }
   const sty = styleOf(st.style);
   if (sty && sty.family !== m.family) throw new Error('That style belongs to another model - pick it again.');
   // Z-Image paints made-up trigger tokens ("3dc4r1c4tur3", "g4me_ass3t") into the picture as text: keep only plain words
   const trig = !sty?.trigger ? '' : m.family !== 'zimage' ? sty.trigger
     : sty.trigger.split(',').map(t => t.trim()).filter(t => t && (/\s/.test(t) || !/[\d_<>]/.test(t))).join(', ');
-  if (trig && !text.toLowerCase().includes(trig.toLowerCase().split(',')[0].trim())) text = trig.replace(/,?\s*$/, ',') + ' ' + text;
+  const core = text, trigAdded = trig && !text.toLowerCase().includes(trig.toLowerCase().split(',')[0].trim());
+  if (trigAdded) text = trig.replace(/,?\s*$/, ',') + ' ' + text;
   setIn(p, N.prompt, 'value', text);
+  if ($('autoEnh').checked && core) addEnhance(p, N.prompt, (edit
+      ? 'Rewrite this picture-edit instruction so an image editing AI follows it exactly: say clearly what to change and that everything else stays the same. 1-3 sentences. '
+      : 'Rewrite this idea as one clear, detailed image-generation prompt: subject, look, materials, colours, lighting, camera, background. 2-4 sentences. ')
+    + ENH_RULES + '\n\nText: ' + core, edit ? ['4', 0] : null, trigAdded ? trig.replace(/,?\s*$/, ',') : '', 260);
   setIn(p, N.neg, 'value', $('neg').value);
   // pictures
   if (edit) {
@@ -629,6 +762,7 @@ async function buildPrompt(){
     if (precise) p1 = await maskedPicture();
     setIn(p, N.p1, 'image', p1); setIn(p, N.precise, 'value', precise); setIn(p, N.edge, 'value', +$('edge').value);
     setIn(p, N.use2, 'value', !!(st.pic2 && st.pic2.name)); if (st.pic2?.name) setIn(p, N.p2, 'image', st.pic2.name);
+    if (st.pic2?.name) addExtraRefs(p, m);
   } else { setIn(p, N.precise, 'value', false); setIn(p, N.use2, 'value', false); }
   // camera (Qwen edit only)
   const cam = m.family === 'qwen' && edit && $('camOn').checked;
@@ -661,7 +795,7 @@ async function buildPrompt(){
   let seed = +$('seed').value; if (!$('lockSeed').checked) { seed = Math.floor(Math.random() * 2 ** 40); $('seed').value = seed; }
   for (const id of SEED_NODES) setIn(p, id, 'seed', seed);
   for (const id of NOISE_NODES) setIn(p, id, 'noise_seed', seed);
-  setIn(p, N.save, 'filename_prefix', 'STUDIO/' + m.id);
+  setIn(p, N.save, 'filename_prefix', `STUDIO/${m.id}_${stamp()}`);
   return {p, meta:{text: $('prompt').value.trim(), model: m.name, style: sty ? sty.name : 'None', styleFile: st.style, seed, edit}};
 }
 async function queue(prompt){
@@ -740,7 +874,8 @@ async function trackImageJob(j){
   const pend = addPending(j.label);
   try {
     const out = await waitFor(j.id, j.label); let n = 0;
-    for (const im of (out[N.save]?.images || [])) { addResult({...im, ...j.meta, seed:j.seed, t:Date.now()}); n++; }
+    const enhanced = enhText(out);
+    for (const im of (out[N.save]?.images || [])) { addResult({...im, ...j.meta, ...(enhanced ? {enhanced} : {}), seed:j.seed, t:Date.now()}); n++; }
     if (!n) toast('Finished, but no image came back.');
   } catch(e) { toast(e.message); }
   pend.remove(); jobDel(j.key); updateBusy();
@@ -768,7 +903,7 @@ function connect(){
 
 // ------------------------------------------------------------------ gallery (Freepik-style select)
 let results = []; try { results = JSON.parse(localStorage.getItem('studio.results') || '[]'); } catch(e) {}
-const viewUrl = r => `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder || '')}&type=${r.type || 'output'}`;
+const viewUrl = r => `/view?filename=${encodeURIComponent(r.filename)}&subfolder=${encodeURIComponent(r.subfolder || '')}&type=${r.type || 'output'}${r.t ? '&t=' + r.t : ''}`;
 const keyOf = r => (r.subfolder || '') + '/' + r.filename;
 const saveResults = () => { try { localStorage.setItem('studio.results', JSON.stringify(results.slice(0, 600))); } catch(e) {} };
 const sel = new Set(); let anchor = null;
@@ -784,19 +919,22 @@ function cardFor(r){
   c.innerHTML = `<button class="ck" title="Select (Shift = range)">✓</button><img loading="lazy" src="${viewUrl(r)}" alt="" draggable="false">
     <div class="acts"><button data-a="edit" title="Edit this picture">Edit</button><button data-a="ref" title="Use as Picture 2">Ref</button>
     <button data-a="reuse" title="Reuse prompt and settings">Reuse</button><a href="${viewUrl(r)}" download="${r.filename}" title="Download">⬇</a></div>
-    <div class="meta">${r.model || ''}${r.style && r.style !== 'None' ? ' · ' + r.style : ''} · ${(r.text || '').replace(/</g, '&lt;')}</div>`;
+    <div class="meta" title="${r.enhanced ? 'Enhanced: ' + escHTML(r.enhanced) : ''}">${r.model || ''}${r.style && r.style !== 'None' ? ' · ' + r.style : ''}${r.enhanced ? ' · ✨' : ''} · ${(r.text || '').replace(/</g, '&lt;')}</div>`;
   const img = c.querySelector('img');
   img.onload = () => { if (!r.w) { r.w = img.naturalWidth; r.h = img.naturalHeight; c.style.setProperty('--ar', (r.w / r.h).toFixed(3)); saveResults(); } };
   c.querySelector('.ck').onclick = e => { e.stopPropagation(); toggleSel(r, e.shiftKey); };
   img.onclick = e => { if (e.shiftKey || e.ctrlKey || e.metaKey || sel.size) return toggleSel(r, e.shiftKey); $('lbImg').src = viewUrl(r); $('lightbox').classList.add('on'); };
   c.querySelector('[data-a=edit]').onclick = () => editResult(r);
-  c.querySelector('[data-a=ref]').onclick = () => { st.tab = 'edit'; loadUrl('pic2', viewUrl(r), ref); renderAll(); };
+  c.querySelector('[data-a=ref]').onclick = () => { st.tab = 'edit'; const k = !st.pic2 ? 'pic2' : st.more.length < MAX_REFS - 2 ? st.more.length : 'pic2'; loadUrl(k, viewUrl(r), ref); renderAll(); };
   c.querySelector('[data-a=reuse]').onclick = () => { $('prompt').value = r.text || ''; const m = MODELS.find(x => x.name === r.model); if (m) st.model = m.id; st.style = r.styleFile || 'None'; $('seed').value = r.seed || 7; renderAll(); };
   return c;
 }
 const EDIT_DEFAULT = () => st.available.has(MODELS[0].need) ? 'qwen21' : 'klein';
 function editResult(r){ st.tab = 'edit'; if (model().edit === 'restyle') st.model = EDIT_DEFAULT(); loadUrl('pic1', viewUrl(r), (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]'); renderAll(); }
-function addResult(r){ results.unshift(r); saveResults(); $('grid').querySelector('.empty')?.remove(); $('grid').prepend(cardFor(r)); updateCount(); }
+function addResult(r){
+  // same file name as an older card = that file was reused, the old card's picture is gone
+  const k = keyOf(r); results = results.filter(x => keyOf(x) !== k); $('grid').querySelectorAll('.card[data-k]').forEach(c => { if (c.dataset.k === k) c.remove(); });
+  results.unshift(r); saveResults(); $('grid').querySelector('.empty')?.remove(); $('grid').prepend(cardFor(r)); updateCount(); }
 function renderGallery(){
   const g = $('grid'); g.innerHTML = '';
   if (!results.length) g.innerHTML = '<div class="empty"><b>Your images appear here</b>Pick a model, describe what you want and press Generate.<br>To edit a picture: open "Edit picture" and paste it (Ctrl+V).</div>';
@@ -901,7 +1039,8 @@ $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlK
     if (!MODELS.some(m => m.id === st.model && ok(m))) st.model = ok(MODELS[0]) ? 'qwen21' : 'zimage';
     if (!SIZES.some(s => s[1] === st.size)) st.size = 1.0;
   } catch(e) { toast('Could not reach ComfyUI: ' + e.message); }
-  renderAll(); renderGallery(); connect();
+  wireEnhance($('autoEnh'));
+  renderAll(); renderGallery(); connect(); restoreRefs();
   for (const j of jobsGet()) trackImageJob(j);   // jobs still running from before a page switch / reload
   if (jobsGet().length) setStatus(`Picked up ${jobsGet().length} job${jobsGet().length > 1 ? 's' : ''} still running.`, 0.05);
 })();

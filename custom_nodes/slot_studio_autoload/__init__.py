@@ -4,6 +4,7 @@
 import asyncio
 import os
 import shutil
+import time
 from fractions import Fraction
 
 import av
@@ -33,7 +34,12 @@ async def trash(request):
             continue
         dst_dir = os.path.join(trash_dir, sub)
         os.makedirs(dst_dir, exist_ok=True)
-        shutil.move(src, os.path.join(dst_dir, os.path.basename(src)))
+        # never overwrite an older trashed file with the same name (ComfyUI reuses numbers after a delete)
+        base, ext = os.path.splitext(os.path.basename(src))
+        dst, n = os.path.join(dst_dir, base + ext), 1
+        while os.path.exists(dst):
+            dst, n = os.path.join(dst_dir, "%s (%d)%s" % (base, n, ext)), n + 1
+        shutil.move(src, dst)
         moved.append(f.get("filename"))
     return web.json_response({"moved": moved, "skipped": skipped})
 
@@ -117,10 +123,13 @@ async def stitch(request):
     sub = "video/STUDIO"
     dst_dir = os.path.join(out_dir, sub)
     os.makedirs(dst_dir, exist_ok=True)
+    # date-stamped so a name is never reused after an older storyboard went to the trash (the browser would show
+    # its cached copy instead of the new video)
+    stamp = time.strftime("%y%m%d-%H%M%S")
     i = 1
-    while os.path.exists(os.path.join(dst_dir, "storyboard_%05d.mp4" % i)):
+    while os.path.exists(os.path.join(dst_dir, "storyboard_%s_%02d.mp4" % (stamp, i))):
         i += 1
-    name = "storyboard_%05d.mp4" % i
+    name = "storyboard_%s_%02d.mp4" % (stamp, i)
     try:
         await asyncio.get_running_loop().run_in_executor(None, _stitch, items, os.path.join(dst_dir, name))
     except Exception as e:
