@@ -148,10 +148,16 @@ if (-not $NoShortcuts) {
     Say "`n[4/4] Desktop shortcuts..."
     $shell = New-Object -ComObject WScript.Shell
     $desk = [Environment]::GetFolderPath("Desktop")
+    $icons = @{
+        "Start ComfyUI" = "$Portable\python_embeded\python.exe,0"
+        "Stop ComfyUI"  = "$env:SystemRoot\System32\shell32.dll,131"
+        "Slot Studio"   = "$env:SystemRoot\System32\imageres.dll,72"
+    }
     foreach ($name in "Start ComfyUI", "Stop ComfyUI", "Slot Studio") {
         $lnk = $shell.CreateShortcut((Join-Path $desk "$name.lnk"))
         $lnk.TargetPath = Join-Path $Portable "$name.bat"
         $lnk.WorkingDirectory = $Portable
+        $lnk.IconLocation = $icons[$name]
         $lnk.Save()
     }
 }
