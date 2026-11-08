@@ -114,6 +114,18 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .card .shotsrow button{background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:12px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#fff1f1;border:1px solid #f3b4b4;color:#9b1c1c;box-shadow:0 6px 20px #0002;padding:10px 14px;border-radius:10px;display:none;z-index:60;max-width:70vw}
 .toast.ok{background:#ecfdf3;border-color:#a7e3bd;color:#166534}
+/* @ tags: a mirror behind the (transparent) textarea paints the highlights; the menu sits under the caret */
+.tagwrap{position:relative}
+.tagwrap textarea{position:relative;z-index:1;background:transparent!important}
+.tagmir{position:absolute;inset:0;overflow:hidden;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;color:transparent;pointer-events:none;border-style:solid;border-color:transparent;margin:0}
+.tagmir mark{color:transparent;background:#dbe7ff;border-radius:4px;box-shadow:0 0 0 1.5px #a9c2f7}
+.tagmir mark.bad{background:#ffe1e1;box-shadow:0 0 0 1.5px #f3b4b4}
+.tagmenu{position:absolute;z-index:40;width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 12px 30px #0002}
+.tagmenu button{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;border-radius:8px;padding:5px 7px;text-align:left;font-size:13px;color:var(--text)}
+.tagmenu button.on{background:var(--hover)}
+.tagmenu button.off{opacity:.55}
+.tagmenu img,.tagmenu .ph{width:32px;height:32px;border-radius:6px;object-fit:cover;background:var(--media);display:flex;align-items:center;justify-content:center;flex:none}
+.tagmenu small{color:var(--dim);font-size:11px;margin-left:auto;text-align:right}
 .hide{display:none!important}
 @media (max-width:900px){.app{grid-template-columns:1fr;height:auto}.gallery{min-height:60vh}}
 </style>
@@ -219,19 +231,118 @@ const st = {start:null, end:null, img:null, vid:null, use:'motion', cam:[45,10,5
 try { Object.assign(st, JSON.parse(localStorage.getItem('studio.video.prefs') || '{}'), {start:null, end:null, img:null, vid:null, running:null, panels:[]}); } catch(e) {}
 const save = () => { try { localStorage.setItem('studio.video.prefs', JSON.stringify({use:st.use, cam:st.cam, dur:st.dur, ar:st.ar, q:st.q, sound:st.sound, kind:st.kind})); } catch(e) {} };
 const $ = id => document.getElementById(id);
-let API = null; const clientId = 'studio-video-' + Math.random().toString(36).slice(2);
+// clientId stays the same for this browser tab (sessionStorage), so after Image -> Video the websocket gets this
+// page's progress again. ComfyUI keeps one socket per clientId, so two tabs must not share it.
+const JOBS_KEY = 'studio.jobs.video';
+let API = null; const clientId = (() => { try { let c = sessionStorage.getItem('studio.cid.video');
+  if (!c) { c = 'studio-video-' + Math.random().toString(36).slice(2); sessionStorage.setItem('studio.cid.video', c); } return c; }
+  catch(e) { return 'studio-video-' + Math.random().toString(36).slice(2); } })();
 function toast(m, ok){ const t=$('toast'); t.textContent=m; t.className='toast'+(ok?' ok':''); t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ok?2500:8000); }
+// ------------------------------------------------------------------ @ tags (same code in index.html + video.html)
+// Type @ in a prompt box to tag a reference (@Picture1, @Start, ...). The box keeps the readable tag and
+// highlights it; on Generate, resolveTags() swaps each tag for the word the chosen model knows that picture by.
+const TAG_RE = /@([A-Za-z]+\d?)\b/g;
+const TAG_BOXES = new Set();
+const escHTML = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
+const repaintTags = () => TAG_BOXES.forEach(b => b.isConnected ? b._tagPaint() : TAG_BOXES.delete(b));
+function tagBox(ta, items){   // items() -> [{tag, sub, thumb, icon, ok}]
+  const wrap = document.createElement('div'); wrap.className = 'tagwrap';
+  ta.parentNode.insertBefore(wrap, ta);
+  const mir = document.createElement('div'); mir.className = 'tagmir';
+  const menu = document.createElement('div'); menu.className = 'tagmenu hide';
+  wrap.append(mir, ta, menu);
+  const copyStyle = () => { const cs = getComputedStyle(ta);
+    for (const k of ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','paddingTop','paddingRight','paddingBottom','paddingLeft',
+                     'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth']) mir.style[k] = cs[k]; };
+  function paint(){
+    copyStyle();
+    const ok = new Map(items().map(i => [i.tag.toLowerCase(), i.ok]));
+    mir.innerHTML = escHTML(ta.value).replace(TAG_RE, (m, t) => ok.has(t.toLowerCase()) ? `<mark class="${ok.get(t.toLowerCase()) ? '' : 'bad'}">${m}</mark>` : m) + '\n';
+    mir.scrollTop = ta.scrollTop;
+  }
+  ta._tagPaint = paint; TAG_BOXES.add(ta);
+  // programmatic value changes (Reuse, AI prompt, loading a board) repaint too
+  const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  Object.defineProperty(ta, 'value', {configurable:true, get(){ return desc.get.call(this); }, set(v){ desc.set.call(this, v); paint(); }});
+  const query = () => { const m = /(^|[^\w@])@(\w*)$/.exec(ta.value.slice(0, ta.selectionStart)); return m ? {q:m[2], at:ta.selectionStart - m[2].length - 1} : null; };
+  let act = 0, list = [], q = null, picked = false;
+  const close = () => { menu.classList.add('hide'); list = []; act = 0; };
+  function open(){
+    const was = q?.q; q = query(); if (!q || ta.selectionStart !== ta.selectionEnd) return close();
+    if (q.q !== was) act = 0;
+    const s = q.q.toLowerCase();
+    list = items().filter(i => i.tag.toLowerCase().startsWith(s)); if (!list.length) return close();
+    act = Math.min(act, list.length - 1);
+    menu.innerHTML = list.map((i, k) => `<button type="button" data-k="${k}" class="${k === act ? 'on' : ''}${i.ok ? '' : ' off'}">`
+      + (i.thumb ? `<img src="${escHTML(i.thumb)}" alt="">` : `<span class="ph">${i.icon || '🖼'}</span>`)
+      + `<b>@${i.tag}</b><small>${escHTML(i.ok ? i.sub : (i.why || 'empty - add it first'))}</small></button>`).join('');
+    menu.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(list[+b.dataset.k]); });
+    // place the menu under the caret: measure the text up to the @ in the mirror
+    mir.innerHTML = escHTML(ta.value.slice(0, q.at)) + '<span>@</span>';
+    const sp = mir.lastChild, x = sp.offsetLeft, y = sp.offsetTop + sp.offsetHeight - ta.scrollTop; paint();
+    menu.style.left = Math.max(0, Math.min(x, wrap.clientWidth - 240)) + 'px'; menu.style.top = (y + 4) + 'px';
+    menu.classList.remove('hide');
+  }
+  function pick(it){
+    if (!it || !q) return;
+    const v = ta.value, end = ta.selectionStart, ins = '@' + it.tag + (/^\s/.test(v.slice(end)) ? '' : ' ');
+    ta.value = v.slice(0, q.at) + ins + v.slice(end);
+    const c = q.at + ins.length; ta.setSelectionRange(c, c); close();
+    picked = true; ta.dispatchEvent(new Event('input', {bubbles:true})); ta.focus();
+  }
+  ta.addEventListener('input', () => { paint(); if (picked) picked = false; else open(); });
+  ta.addEventListener('scroll', () => { mir.scrollTop = ta.scrollTop; });
+  ta.addEventListener('click', open);
+  ta.addEventListener('blur', () => setTimeout(close, 120));
+  ta.addEventListener('keydown', e => {
+    if (menu.classList.contains('hide') || !list.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); act = (act + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; open(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(list[act]); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  ta.addEventListener('keyup', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') open(); });
+  new ResizeObserver(paint).observe(ta);
+  paint();
+  return ta;
+}
+// words: {tag(lowercase): model word}. A known tag missing from words throws why(tag) as the error.
+function resolveTags(text, words, known, why){
+  return text.replace(TAG_RE, (m, t) => { const k = t.toLowerCase(); if (!known.includes(k)) return m;
+    if (words[k] == null) throw new Error(why(t)); return words[k]; });
+}
 
 // ------------------------------------------------------------------ shots
 function addShot(text=''){
   const d = document.createElement('div'); d.className = 'shot';
-  d.innerHTML = `<div class="sh"><span></span><button title="Remove shot">✕</button></div><textarea placeholder="Describe the shot: what happens, how the camera moves..."></textarea>`;
+  d.innerHTML = `<div class="sh"><span></span><button title="Remove shot">✕</button></div><textarea placeholder="Describe the shot: what happens, how the camera moves... (type @ to tag a reference)"></textarea>`;
+  tagBox(d.querySelector('textarea'), singleTags);
   d.querySelector('textarea').value = text;
   d.querySelector('button').onclick = () => { if ($('shots').children.length > 1) { d.remove(); numberShots(); } else d.querySelector('textarea').value = ''; };
   $('shots').appendChild(d); numberShots(); return d;
 }
 function numberShots(){ [...$('shots').children].forEach((d, i, all) => d.querySelector('.sh span').textContent = all.length > 1 ? `Shot ${i+1}` : ''); }
 $('addShot').onclick = () => addShot().querySelector('textarea').focus();
+// @ tags. H3 numbers its references per request (comfy/text_encoders/minimax.py): first/last-frame shots label them
+// "<Picture 1>", "<Picture 2>"; reference shots label pictures "<Picture i>" and videos "<Video k>" in input order.
+// What sits in which slot depends on the mode (17's wiring), so the words are picked per mode here.
+const VTAGS = ['start', 'end', 'image', 'video'];
+const singleTags = () => [
+  {tag:'Start', sub:'start image', thumb:st.start?.url, ok:!!st.start},
+  {tag:'End', sub:'end image', thumb:st.end?.url, ok:!!st.end},
+  {tag:'Image', sub:'added image', thumb:st.img?.url, ok:!!st.img},
+  {tag:'Video', sub:'added video', icon:'🎬', ok:!!st.vid}];
+function videoTagWords(m){
+  if (m === 0) return {start:st.start ? '<Picture 1>' : null, end:st.end ? (st.start ? '<Picture 2>' : '<Picture 1>') : null};
+  if (m === 2) return {start:'<Picture 1>', image:st.img ? '<Picture 2>' : null, video:'the pose video'};   // pose video drives a ControlNet, not a reference
+  if (m === 3) return {image:'<Picture 1>', video:'the video'};   // the new background is the first frame
+  if (m === 4) return {image:st.img ? '<Picture 2>' : null, video:'<Video 1>'};   // Picture 1 = the re-angled first frame
+  return {};
+}
+const videoTagWhy = m => t => {
+  const k = t.toLowerCase(), key = {start:'start', end:'end', image:'img', video:'vid'}[k];
+  if (!st[key]) return `You tagged @${t}, but there is no ${k === 'image' || k === 'video' ? 'added ' + k : k + ' image'} - add it or remove the tag.`;
+  return `@${t} isn't used in this mode (${{0:'animate pictures', 1:'text only', 2:'copy motion', 3:'new background', 4:'new camera'}[m]}) - remove the tag.`;
+};
 function promptText(){
   const shots = [...$('shots').querySelectorAll('textarea')].map(t => t.value.trim()).filter(Boolean);
   let p = shots.length > 1 ? shots.map((s, i) => `SHOT ${i+1}: ${s}`).join('\n') : (shots[0] || '');
@@ -308,7 +419,7 @@ function problems(){
   return '';
 }
 function render(){
-  const board = st.kind === 'board';
+  const board = st.kind === 'board'; repaintTags();
   document.querySelectorAll('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.k === st.kind));
   $('boardBox').classList.toggle('hide', !board); $('refSec').classList.toggle('hide', board); $('shotBox').classList.toggle('hide', board);
   $('durBtn').parentNode.classList.toggle('hide', board);
@@ -317,7 +428,7 @@ function render(){
   $('qBtn').textContent = (QS.find(q => q[1] === st.q) || QS[0])[0] + ' ▾';
   $('soundBtn').textContent = st.sound ? '🔊 ON' : '🔇 OFF'; $('soundBtn').classList.toggle('off', !st.sound);
   $('soundLine').classList.toggle('hide', !st.sound);
-  if (board) { boardChecks(); if (!st.running) $('status').textContent = boardSummary(); save(); return; }
+  if (board) { boardChecks(); if (!mine.size) $('status').textContent = boardSummary(); save(); return; }
   $('slotStart').innerHTML = slotHTML('start', 'Start image', '🖼');
   $('slotEnd').innerHTML = slotHTML('end', 'End image', '🏁');
   const it = $('mitems'); it.innerHTML = '';
@@ -332,7 +443,7 @@ function render(){
   const pr = problems(); $('useWarn').textContent = pr; $('useWarn').classList.toggle('hide', !pr || !st.vid);
   const hints = {0:'Animate your picture' + (st.end ? (st.start ? ' from start to end image' : ' ending on the end image') : ''), 1:'Text to video',
                  2:'Copy the video\'s motion onto the start image', 3:'Put the video\'s character on a new background', 4:'Re-film the video from a new angle'};
-  if (!st.running) $('status').textContent = hints[mode()] + ' · ' + estimate();
+  if (!mine.size) $('status').textContent = hints[mode()] + ' · ' + estimate();
   save();
 }
 function estimate(){
@@ -414,7 +525,9 @@ function renderPanels(){
       <div><textarea placeholder="${ph}"></textarea>
       <div class="prow">${last && !p.text.trim() ? '<span>final frame</span>' : `⏱ <select>${DURS.map(s => `<option value="${s}"${s === p.dur ? ' selected' : ''}>${s} s</option>`).join('')}</select>`}
       <span style="flex:1"></span><button class="mv" data-m="-1" title="Move up">▲</button><button class="mv" data-m="1" title="Move down">▼</button></div></div>`;
-    const ta = d.querySelector('textarea'); ta.value = p.text;
+    const ta = d.querySelector('textarea'); tagBox(ta, () => [{tag:'Start', sub:`this panel (${i+1})`, thumb:p.url, ok:true},
+      {tag:'End', sub:last ? 'no next panel' : `panel ${i+2}${p.link ? '' : ' - join it first'}`, thumb:st.panels[i+1]?.url, ok:!last && p.link, why:last ? 'no next panel' : 'cut - join it first'}]);
+    ta.value = p.text;
     ta.oninput = () => { const had = !!p.text.trim(); p.text = ta.value; saveBoard();
       if (last && had !== !!p.text.trim()) { renderPanels(); const t = $('panels').querySelectorAll('textarea')[i]; t.focus(); t.selectionStart = t.value.length; }
       render(); };
@@ -463,7 +576,7 @@ function buildPrompt(){
   setIn(p, N.keepSound, 'value', $('keepSound').checked);
   const text = promptText();
   if (!text && m <= 1) throw new Error('Describe the shot first.');
-  setIn(p, N.desc, 'value', text);
+  setIn(p, N.desc, 'value', resolveTags(text, videoTagWords(m), VTAGS, videoTagWhy(m)));
   setIn(p, N.loop, 'value', !!(st.start && !st.end && $('loop').checked));
   setIn(p, N.cam, 'horizontal_angle', st.cam[0]); setIn(p, N.cam, 'vertical_angle', st.cam[1]); setIn(p, N.cam, 'zoom', st.cam[2]);
   setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === st.ar)[1]); setIn(p, N.res, 'megapixels', st.q);
@@ -481,10 +594,60 @@ async function queue(prompt){
   if (!r.ok || j.error) { const ne = j.node_errors ? Object.values(j.node_errors).map(e => e.errors?.map(x => x.message + ' ' + (x.details||'')).join('; ')).join(' | ') : ''; throw new Error((j.error?.message || 'queue failed') + ' ' + ne); }
   return j.prompt_id;
 }
-const waiters = {}; const waitFor = id => new Promise((res, rej) => waiters[id] = {res, rej, out:{}});
+// ------------------------------------------------------------------ jobs that survive page switches (same code in both pages)
+// Pending jobs are kept in sessionStorage (this browser tab only), so going Image -> Video -> Image picks them up again,
+// and Generate stays usable: more jobs just line up in ComfyUI's queue (one GPU = one job at a time).
+// The websocket gives progress; completion is also polled from /history, so a job ends even if its events were missed.
+const waiters = {}, mine = new Map();   // prompt_id -> {label, frac:[from, to]}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const jobsGet = () => { try { return JSON.parse(sessionStorage.getItem(JOBS_KEY) || '[]'); } catch(e) { return []; } };
+const jobsSet = a => { try { sessionStorage.setItem(JOBS_KEY, JSON.stringify(a)); } catch(e) {} };
+const jobPut = j => jobsSet([...jobsGet().filter(x => x.key !== j.key), j]);
+const jobDel = key => jobsSet(jobsGet().filter(x => x.key !== key));
+async function historyOf(id){
+  try { const r = await fetch('/history/' + encodeURIComponent(id), {cache:'no-store'}); if (!r.ok) return undefined; return (await r.json())[id] || null; }
+  catch(e) { return undefined; }   // undefined = server unreachable, null = not finished yet
+}
+function histResult(h){
+  if (h.status?.status_str === 'error') {
+    const ms = h.status.messages || [], er = ms.find(m => m[0] === 'execution_error')?.[1];
+    return new Error(ms.some(m => m[0] === 'execution_interrupted') ? 'Stopped.' : er ? `${er.node_type}: ${er.exception_message}` : 'Failed.');
+  }
+  return h.outputs || {};
+}
+function waitFor(id, label, frac){
+  mine.set(id, {label:label || '', frac:frac || [0, 1]}); updateBusy();
+  return new Promise((res, rej) => {
+    const done = v => { if (!waiters[id]) return; delete waiters[id]; mine.delete(id); updateBusy(); v instanceof Error ? rej(v) : res(v); };
+    waiters[id] = {out:{}, done};
+    (async () => { let gone = 0;
+      while (waiters[id]) {
+        await sleep(2500); if (!waiters[id]) return;
+        const h = await historyOf(id);
+        if (h) return done(histResult(h));
+        if (h === undefined) continue;
+        try { const q = await (await fetch('/queue', {cache:'no-store'})).json();
+          gone = [...q.queue_running, ...q.queue_pending].some(x => x[1] === id) ? 0 : gone + 1;
+          if (gone >= 3) return done(new Error('That job is no longer in ComfyUI (restarted or queue cleared?).'));
+        } catch(e) {}
+      }
+    })();
+  });
+}
+// websocket events for our jobs; returns the job's {label, frac} when the event belongs to one of them
+function jobEvent(type, data){
+  const w = waiters[data?.prompt_id];
+  if (type === 'executed' && w) w.out[data.node] = data.output;
+  if (type === 'execution_success' && w && Object.keys(w.out).length) w.done(w.out);   // else the /history poll picks it up
+  if (type === 'execution_error' && w) w.done(new Error(`${data.node_type}: ${data.exception_message}`));
+  if (type === 'execution_interrupted' && w) w.done(new Error('Stopped.'));
+  return mine.get(data?.prompt_id);
+}
 function setStatus(t, f){ $('status').textContent = t; if (f != null) $('barFill').style.width = Math.round(f * 100) + '%'; }
 // One storyboard shot = mode 0 (animate) with the panel as start image and, when joined, the next panel as end image.
-function shotPrompt(s, common, seed){
+// o = the board's own shape / quality / sound settings (kept in the job, so a resumed board doesn't use today's chips)
+function shotPrompt(s, common, seed, o){
+  o = o || {ar:st.ar, q:st.q, sound:st.sound, soundText:$('soundText').value};
   const p = JSON.parse(JSON.stringify(API));
   setIn(p, N.mode, 'index', 0); setIn(p, N.mode, 'choice', p[N.mode].inputs.option1);
   setIn(p, N.start, 'image', s.start); setIn(p, N.end, 'image', s.end || EMPTY);
@@ -492,18 +655,15 @@ function shotPrompt(s, common, seed){
   // Free-ending shots (no end image) skip the "Every shot" text: a character named there but not in the
   // panel makes H3 cut away to a made-up close-up of them (tested 2026-11-02). The panel already sets the look.
   let text = [s.end ? common : '', s.text || common, 'One single continuous shot, no cuts, no scene change, no new characters.'].filter(Boolean).join('\n');
-  if (st.sound && $('soundText').value.trim()) text += `\nAudio: ${$('soundText').value.trim()}`;
+  if (o.sound && (o.soundText || '').trim()) text += `\nAudio: ${o.soundText.trim()}`;
+  text = resolveTags(text, {start:'<Picture 1>', end:s.end ? '<Picture 2>' : null}, VTAGS, t => ['start', 'end'].includes(t.toLowerCase())
+    ? `Panel ${s.panel + 1} is cut from the next one, so @End means nothing in its shot - join them or remove the tag.`
+    : `Storyboard shots only know @Start (this panel) and @End (the next panel) - remove @${t}.`);
   setIn(p, N.desc, 'value', text);
-  setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === st.ar)[1]); setIn(p, N.res, 'megapixels', st.q);
-  setIn(p, N.dur, 'value', s.dur); setIn(p, N.seed, 'noise_seed', seed); setIn(p, N.sound, 'value', st.sound);
+  setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === o.ar)[1]); setIn(p, N.res, 'megapixels', o.q);
+  setIn(p, N.dur, 'value', s.dur); setIn(p, N.seed, 'noise_seed', seed); setIn(p, N.sound, 'value', o.sound);
   setIn(p, N.save, 'filename_prefix', 'video/STUDIO/board_shot');
   return p;
-}
-async function runShot(s, seed, label, frac0, frac1){
-  const id = await queue(shotPrompt(s, s.common, seed)); st.running = id; st.runLabel = label; st.runFrac = [frac0, frac1];
-  const out = await waitFor(id); const v = (out[N.save]?.images || [])[0];
-  if (!v) throw new Error(label + ' finished, but no video came back.');
-  return {filename:v.filename, subfolder:v.subfolder, type:v.type || 'output'};
 }
 async function stitchBoard(shots){
   setStatus('Joining the shots...', 0.97);
@@ -511,65 +671,77 @@ async function stitchBoard(shots){
     body:JSON.stringify({clips:shots.map(s => ({...s.clip, skip_first:s.skip}))})});
   const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || 'stitch failed'); return j;
 }
+// A board job queues every shot that has no clip yet (they don't depend on each other), waits for them in order,
+// then stitches. Each step is saved into the job, so after a page switch it carries on where it was.
+async function trackBoard(j){
+  const pend = addPending(j.pendMeta);
+  try {
+    const todo = j.shots.filter(s => !s.clip);
+    for (const s of todo) if (!s.pid) { s.pid = await queue(shotPrompt(s, s.common, s.seed, j.opts)); jobPut(j); }
+    for (const [n, s] of todo.entries()) {
+      const label = j.redo != null ? `Redo shot ${j.redo + 1}` : `Shot ${j.shots.indexOf(s) + 1}/${j.shots.length}`;
+      const out = await waitFor(s.pid, label, [n / todo.length, (n + 1) / todo.length]);
+      const v = (out[N.save]?.images || [])[0]; if (!v) throw new Error(label + ' finished, but no video came back.');
+      s.clip = {filename:v.filename, subfolder:v.subfolder, type:v.type || 'output'}; delete s.pid; jobPut(j);
+    }
+    const v = await stitchBoard(j.shots);
+    addResult({...j.base, ...v, board:{...j.base.board, shots:j.shots}, t:Date.now()}, true); setStatus('Done.', 1);
+  } catch(e) { toast(e.message); setStatus('Error - see message.', 0); }
+  pend.remove(); jobDel(j.key); updateBusy();
+}
 async function runBoard(){
   if (boardChecks()) return toast($('boardWarn').textContent);
   if (st.panels.some(p => !p.name)) return toast('Still uploading, try again in a second.');
   const common = $('boardCommon').value.trim(), shots = boardShots();
   if (!shots.length) return toast('Add your storyboard panels first.');
   const blank = shots.findIndex(s => !s.text && !common); if (blank >= 0) return toast(`Describe shot ${blank + 1} (or fill "Every shot").`);
+  try { for (const s of shots) shotPrompt({...s}, common, 0); } catch(e) { return toast(e.message); }   // tag problems before anything runs
   let seed = +$('seed').value; if (!$('lockSeed').checked) { seed = Math.floor(Math.random() * 2 ** 40); $('seed').value = seed; }
   const meta = {what:'Storyboard', dur:shots.reduce((a, s) => a + s.dur, 0), ar:st.ar, q:st.q, sound:st.sound, seed, text:common || shots[0].text};
-  $('gen').disabled = true; const pend = addPending(meta);
-  try {
-    for (const [i, s] of shots.entries()) { s.common = common; s.seed = seed; s.clip = await runShot(s, seed, `Shot ${i+1}/${shots.length}`, i / shots.length, (i + 1) / shots.length); }
-    const v = await stitchBoard(shots);
-    pend.remove(); addResult({...v, ...meta, board:{common, panels:st.panels.map(({name, text, dur, link}) => ({name, text, dur, link})), sound:$('soundText').value, shots}, t:Date.now()}, true);
-    setStatus('Done.', 1);
-  } catch(e) { pend.remove(); toast(e.message); setStatus('Error - see message.', 0); }
-  st.running = null; st.runLabel = null; $('gen').disabled = false;
+  for (const s of shots) { s.common = common; s.seed = seed; }
+  const job = {key:'board-' + Date.now(), kind:'board', pendMeta:meta, shots,
+               opts:{ar:st.ar, q:st.q, sound:st.sound, soundText:$('soundText').value},
+               base:{...meta, board:{common, panels:st.panels.map(({name, text, dur, link}) => ({name, text, dur, link})), sound:$('soundText').value}}};
+  jobPut(job); trackBoard(job);
 }
-async function redoShot(r, k){
-  if (st.running) return toast('Wait for the current video to finish.');
-  const shots = r.board.shots.map(s => ({...s})), s = shots[k], seed = Math.floor(Math.random() * 2 ** 40);
-  $('gen').disabled = true; const pend = addPending({what:`Redo shot ${k+1}`, dur:s.dur, ar:r.ar});
+function redoShot(r, k){
+  const shots = r.board.shots.map(s => ({...s})), s = shots[k];
+  s.seed = Math.floor(Math.random() * 2 ** 40); s.clip = null; delete s.pid;
+  const job = {key:'board-' + Date.now(), kind:'board', redo:k, pendMeta:{what:`Redo shot ${k+1}`, dur:s.dur, ar:r.ar}, shots,
+               opts:{ar:r.ar, q:r.q, sound:r.sound, soundText:r.board.sound || ''}, base:r};
+  jobPut(job); trackBoard(job);
+}
+async function trackSingle(j){
+  const pend = addPending(j.meta);
   try {
-    const was = [st.ar, st.q, st.sound]; [st.ar, st.q, st.sound] = [r.ar, r.q, r.sound];
-    const snd = $('soundText').value; $('soundText').value = r.board.sound || '';
-    try { s.seed = seed; s.clip = await runShot(s, seed, `Redo shot ${k+1}`, 0, 1); }
-    finally { [st.ar, st.q, st.sound] = was; $('soundText').value = snd; }
-    const v = await stitchBoard(shots);
-    pend.remove(); addResult({...r, ...v, board:{...r.board, shots}, t:Date.now()}, true); setStatus('Done.', 1);
-  } catch(e) { pend.remove(); toast(e.message); setStatus('Error - see message.', 0); }
-  st.running = null; st.runLabel = null; $('gen').disabled = false;
+    const out = await waitFor(j.id, j.meta.what), vids = out[N.save]?.images || [];
+    for (const v of vids) addResult({...v, ...j.meta, t:Date.now()}, true);
+    setStatus(vids.length ? 'Done.' : 'Finished, but no video came back.', 1);
+  } catch(e) { toast(e.message); setStatus('Error - see message.', 0); }
+  pend.remove(); jobDel(j.key); updateBusy();
+}
+function updateBusy(){
+  const n = new Set(jobsGet().map(j => j.key)).size;
+  $('gen').textContent = n ? `Generate  ·  ${n} in progress` : 'Generate';
 }
 $('gen').onclick = async () => {
   if (st.kind === 'board') return runBoard();
   let b; try { b = buildPrompt(); } catch(e) { return toast(e.message); }
-  $('gen').disabled = true; setStatus('Sending...', 0.02);
-  const pend = addPending(b.meta);
-  try {
-    const id = await queue(b.p); st.running = id;
-    const out = await waitFor(id);
-    pend.remove();
-    const vids = out[N.save]?.images || [];
-    for (const v of vids) addResult({...v, ...b.meta, t:Date.now()}, true);
-    setStatus(vids.length ? 'Done.' : 'Finished, but no video came back.', 1);
-  } catch(e) { pend.remove(); toast(e.message); setStatus('Error - see message.', 0); }
-  st.running = null; $('gen').disabled = false;
+  $('gen').disabled = true; setStatus('Sending...', 0.02);   // only while sending, so a double click can't queue twice
+  try { const id = await queue(b.p); const j = {key:id, kind:'single', id, meta:b.meta}; jobPut(j); trackSingle(j); }
+  catch(e) { toast(e.message); setStatus('Error - see message.', 0); }
+  $('gen').disabled = false; updateBusy();
 };
 function connect(){
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?clientId=${clientId}`);
   ws.onmessage = ev => {
     if (typeof ev.data !== 'string') return;
-    const {type, data} = JSON.parse(ev.data); const w = waiters[data?.prompt_id];
-    if (type === 'status' && st.running) { const q = data.status?.exec_info?.queue_remaining; if (q > 1) setStatus(`Waiting in queue (${q - 1} ahead)...`); }
-    const lab = st.runLabel ? st.runLabel + ' · ' : '', [f0, f1] = st.runLabel ? st.runFrac : [0, 1], fr = x => f0 + (f1 - f0) * x;
-    if (type === 'execution_start' && data.prompt_id === st.running) setStatus(lab + 'Preparing... (first video of the day loads ~40 GB of model, 1-2 min)', fr(0.05));
-    if (type === 'progress' && data.prompt_id === st.running) setStatus(lab + (data.max > 40 ? `Working... ${data.value}/${data.max}` : `Generating... step ${data.value}/${data.max}`), fr(0.1 + 0.85 * data.value / data.max));
-    if (type === 'executed' && w) w.out[data.node] = data.output;
-    if (type === 'execution_success' && w) { w.res(w.out); delete waiters[data.prompt_id]; }
-    if (type === 'execution_error' && w) { w.rej(new Error(`${data.node_type}: ${data.exception_message}`)); delete waiters[data.prompt_id]; }
-    if (type === 'execution_interrupted' && w) { w.rej(new Error('Stopped.')); delete waiters[data.prompt_id]; }
+    const {type, data} = JSON.parse(ev.data); const job = jobEvent(type, data);
+    if (type === 'status' && mine.size) { const q = data.status?.exec_info?.queue_remaining; if (q > 1) setStatus(`${mine.size} of yours waiting or running (${q} jobs in ComfyUI)...`); }
+    if (!job) return;
+    const lab = job.label ? job.label + ' · ' : '', [f0, f1] = job.frac, fr = x => f0 + (f1 - f0) * x;
+    if (type === 'execution_start') setStatus(lab + 'Preparing... (first video of the day loads ~40 GB of model, 1-2 min)', fr(0.05));
+    if (type === 'progress') setStatus(lab + (data.max > 40 ? `Working... ${data.value}/${data.max}` : `Generating... step ${data.value}/${data.max}`), fr(0.1 + 0.85 * data.value / data.max));
   };
   ws.onclose = () => setTimeout(connect, 2000);
 }
@@ -597,9 +769,10 @@ function addResult(r, isNew){
   c.innerHTML = `<video src="${viewUrl(r)}" controls loop playsinline preload="metadata"></video>
     <div class="meta" title="${(r.text||'').replace(/"/g,'&quot;')}">${r.what || ''} · ${r.dur || '?'} s · ${r.ar || ''} · ${r.text || ''}</div>
     <div class="acts"><a href="${viewUrl(r)}" download="${r.filename}">⬇ Download</a><button data-a="use">Use as video</button>
-    <button data-a="cont">Continue from last frame</button><button data-a="reuse">Reuse</button></div>
+    <button data-a="cont">Continue from last frame</button><button data-a="reuse">Reuse</button><button data-a="del" style="margin-left:auto;color:#c0392b">🗑 Delete</button></div>
     ${r.board ? `<div class="shotsrow">Redo shot: ${r.board.shots.map((s, k) => `<button data-redo="${k}" title="${(s.text || '').replace(/"/g,'&quot;')}">${k+1}</button>`).join('')}</div>` : ''}`;
   c.querySelectorAll('[data-redo]').forEach(b => b.onclick = () => redoShot(r, +b.dataset.redo));
+  c.querySelector('[data-a=del]').onclick = () => deleteResult(r, c);
   c.querySelector('[data-a=use]').onclick = () => { st.vid = {url:viewUrl(r), name:ref, video:true}; render(); toast('Added as the video. Pick what to do with it.', true); };
   c.querySelector('[data-a=cont]').onclick = async () => {
     try { const b = await lastFrame(r); st.start = {url:URL.createObjectURL(b), name:null, video:false}; st.end = null; st.vid = null; render();
@@ -616,6 +789,26 @@ function addResult(r, isNew){
   };
   if (isNew) g.prepend(c); else g.appendChild(c);
 }
+// Delete = move the file(s) to ComfyUI\output\_trash (same route as the image page). A storyboard card also
+// trashes its shot clips, unless another card (e.g. a "Redo shot" version) still uses them.
+const fileKey = f => (f.subfolder || '') + '/' + f.filename;
+async function deleteResult(r, card){
+  if (!confirm(`Delete this video?\n${r.filename}\n(It moves to ComfyUI\\output\\_trash, so you can still get it back.)`)) return;
+  const others = results.filter(x => x !== r);
+  const used = new Set(others.flatMap(x => [x, ...(x.board?.shots || []).map(s => s.clip).filter(Boolean)]).map(fileKey));
+  const files = [r, ...(r.board?.shots || []).map(s => s.clip).filter(Boolean)]
+    .filter((f, i, a) => !used.has(fileKey(f)) && a.findIndex(g => fileKey(g) === fileKey(f)) === i)
+    .map(f => ({filename:f.filename, subfolder:f.subfolder || '', type:f.type || 'output'}));
+  let note = '';
+  const v = card.querySelector('video'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); }  // let go of the file first (Windows locks)
+  try {
+    const res = await fetch('/slot_studio/trash', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({files})});
+    if (!res.ok) note = ' File kept on disk: restart ComfyUI once to enable the trash.';
+  } catch(e) { note = ' File kept on disk: ' + e.message; }
+  results = others; try { localStorage.setItem('studio.video.results', JSON.stringify(results)); } catch(e) {}
+  card.remove(); if (!results.length) renderGallery();
+  toast('Deleted.' + note, !note);
+}
 function renderGallery(){
   $('gallery').innerHTML = '';
   if (!results.length) $('gallery').innerHTML = '<div class="empty"><b>Your videos appear here</b>Add a start image (or nothing for text-to-video), describe the shot, press Generate.<br>Add a video under "Add media" to copy its motion, change its background or re-film it.</div>';
@@ -627,7 +820,12 @@ $('clearGallery').onclick = () => { if (!confirm('Clear the list? (files stay in
   try { API = await (await fetch('video_api.json', {cache:'no-store'})).json(); }
   catch(e) { toast('Could not load the video workflow: ' + e.message); }
   addShot(); try { loadBoard(JSON.parse(localStorage.getItem(BOARD_KEY) || 'null')); } catch(e) {}
+  tagBox($('boardCommon'), () => [{tag:'Start', sub:'each shot\'s own panel', ok:true}, {tag:'End', sub:'the next panel (joined shots)', ok:true}]);
   render(); renderGallery(); connect();
+  const left = jobsGet();   // jobs still running from before a page switch / reload
+  for (const j of left) j.kind === 'board' ? trackBoard(j) : trackSingle(j);
+  if (left.length) setStatus(`Picked up ${left.length} job${left.length > 1 ? 's' : ''} still running.`, 0.05);
+  updateBusy();
 })();
 </script>
 </body>

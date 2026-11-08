@@ -47,6 +47,12 @@ finished files are skipped and half-done files resume.
 
 * **Slot Studio** (Desktop) – simple page with **Image** and **Video** tabs. Pick model, write a prompt, Generate.
   Results land in `ComfyUI\output\STUDIO` and `ComfyUI\output\video\STUDIO`.
+  * Type **@** in a prompt to tag a reference (`@Picture1`, `@Picture2`; video: `@Start`, `@End`, `@Image`, `@Video`).
+    The page swaps each tag for the name the chosen model uses for that picture (`Picture 2` for Qwen Edit,
+    `<image2>` for Qwen-Image 2.1, `image 2` for Klein, `<Picture 1>` / `<Video 1>` for MiniMax H3).
+  * Generate stays usable while a job runs: extra jobs wait in ComfyUI's queue (one GPU = one at a time).
+    Switching between Image and Video keeps your running jobs; they show up when you come back.
+  * 🗑 Delete (pictures and videos) moves the files to `ComfyUI\output\_trash`, so they can still be recovered.
 * **Start ComfyUI** – the node editor. Open the **Workflows** sidebar → `16_IMAGE_All_In_One` or
   `17_VIDEO_All_In_One`; switch MODEL / TASK / MODE in the panel at the top and press Run.
 * **Stop ComfyUI** – closes it and frees the GPU.

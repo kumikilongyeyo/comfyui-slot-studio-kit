@@ -109,6 +109,18 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .lightbox img{max-width:100%;max-height:100%;border-radius:10px}
 .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#fff1f1;border:1px solid #f3b4b4;color:#9b1c1c;box-shadow:0 6px 20px #0002;padding:10px 14px;border-radius:10px;display:none;z-index:60;max-width:70vw}
 .toast.ok{background:#ecfdf3;border-color:#a7e3bd;color:#166534}
+/* @ tags: a mirror behind the (transparent) textarea paints the highlights; the menu sits under the caret */
+.tagwrap{position:relative}
+.tagwrap textarea{position:relative;z-index:1;background:transparent!important}
+.tagmir{position:absolute;inset:0;overflow:hidden;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;color:transparent;pointer-events:none;border-style:solid;border-color:transparent;margin:0}
+.tagmir mark{color:transparent;background:#dbe7ff;border-radius:4px;box-shadow:0 0 0 1.5px #a9c2f7}
+.tagmir mark.bad{background:#ffe1e1;box-shadow:0 0 0 1.5px #f3b4b4}
+.tagmenu{position:absolute;z-index:40;width:240px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:0 12px 30px #0002}
+.tagmenu button{display:flex;align-items:center;gap:8px;width:100%;background:none;border:0;border-radius:8px;padding:5px 7px;text-align:left;font-size:13px;color:var(--text)}
+.tagmenu button.on{background:var(--hover)}
+.tagmenu button.off{opacity:.55}
+.tagmenu img,.tagmenu .ph{width:32px;height:32px;border-radius:6px;object-fit:cover;background:var(--media);display:flex;align-items:center;justify-content:center;flex:none}
+.tagmenu small{color:var(--dim);font-size:11px;margin-left:auto;text-align:right}
 .hide{display:none!important}
 /* compact Freepik-style controls */
 .dd{width:100%;display:flex;align-items:center;gap:8px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;text-align:left}
@@ -167,7 +179,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
       <div class="lbl"><span id="promptLbl">Prompt</span></div>
       <div class="pbox">
         <textarea id="prompt" placeholder="Describe what you want..."></textarea>
-        <div class="pbar"><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt">✨ AI prompt</button><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
+        <div class="pbar"><button class="ghost" id="tagBtn" title="Tag a reference picture (or just type @)">@ Tag</button><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt">✨ AI prompt</button><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
       </div>
       <div class="brow" style="margin-top:10px">
         <div class="stepper" title="Number of images (1-12)"><button id="cMinus">−</button><span id="count">1</span><button id="cPlus">+</button></div>
@@ -266,13 +278,90 @@ const CAMS = [['Front',0,0],['¾ right',45,0],['Right',90,0],['Back',180,0],['Le
 const st = { tab:'create', model:'qwen21', style:'None', aspect:'1:1', size:1.0, count:1,
              pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set(), running:null };
 const $ = id => document.getElementById(id);
-let API = null, clientId = 'studio-' + Math.random().toString(36).slice(2);
+// clientId stays the same for this browser tab (sessionStorage), so after Video -> Image the websocket gets this
+// page's progress again. ComfyUI keeps one socket per clientId, so two tabs must not share it.
+const JOBS_KEY = 'studio.jobs.image';
+let API = null, clientId = (() => { try { let c = sessionStorage.getItem('studio.cid.image');
+  if (!c) { c = 'studio-' + Math.random().toString(36).slice(2); sessionStorage.setItem('studio.cid.image', c); } return c; }
+  catch(e) { return 'studio-' + Math.random().toString(36).slice(2); } })();
 try { Object.assign(st, JSON.parse(localStorage.getItem('studio.prefs') || '{}'), {running:null, pic1:null, pic2:null, painted:false, available:new Set(), loras:new Set()}); } catch(e) {}
 try { if (!localStorage.getItem('studio.q21default')) { st.model = 'qwen21'; st.style = 'None'; localStorage.setItem('studio.q21default', '1'); } } catch(e) {}
 const savePrefs = () => { try { localStorage.setItem('studio.prefs', JSON.stringify({tab:st.tab, model:st.model, style:st.style, aspect:st.aspect, size:st.size, count:st.count})); } catch(e) {} };
 
 function toast(msg, ok){ const t=$('toast'); t.textContent=msg; t.className='toast'+(ok?' ok':''); t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ok?2500:7000); }
 const model = () => MODELS.find(m => m.id === st.model);
+// ------------------------------------------------------------------ @ tags (same code in index.html + video.html)
+// Type @ in a prompt box to tag a reference (@Picture1, @Start, ...). The box keeps the readable tag and
+// highlights it; on Generate, resolveTags() swaps each tag for the word the chosen model knows that picture by.
+const TAG_RE = /@([A-Za-z]+\d?)\b/g;
+const TAG_BOXES = new Set();
+const escHTML = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;'}[c]));
+const repaintTags = () => TAG_BOXES.forEach(b => b.isConnected ? b._tagPaint() : TAG_BOXES.delete(b));
+function tagBox(ta, items){   // items() -> [{tag, sub, thumb, icon, ok}]
+  const wrap = document.createElement('div'); wrap.className = 'tagwrap';
+  ta.parentNode.insertBefore(wrap, ta);
+  const mir = document.createElement('div'); mir.className = 'tagmir';
+  const menu = document.createElement('div'); menu.className = 'tagmenu hide';
+  wrap.append(mir, ta, menu);
+  const copyStyle = () => { const cs = getComputedStyle(ta);
+    for (const k of ['fontFamily','fontSize','fontWeight','lineHeight','letterSpacing','paddingTop','paddingRight','paddingBottom','paddingLeft',
+                     'borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth']) mir.style[k] = cs[k]; };
+  function paint(){
+    copyStyle();
+    const ok = new Map(items().map(i => [i.tag.toLowerCase(), i.ok]));
+    mir.innerHTML = escHTML(ta.value).replace(TAG_RE, (m, t) => ok.has(t.toLowerCase()) ? `<mark class="${ok.get(t.toLowerCase()) ? '' : 'bad'}">${m}</mark>` : m) + '\n';
+    mir.scrollTop = ta.scrollTop;
+  }
+  ta._tagPaint = paint; TAG_BOXES.add(ta);
+  // programmatic value changes (Reuse, AI prompt, loading a board) repaint too
+  const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+  Object.defineProperty(ta, 'value', {configurable:true, get(){ return desc.get.call(this); }, set(v){ desc.set.call(this, v); paint(); }});
+  const query = () => { const m = /(^|[^\w@])@(\w*)$/.exec(ta.value.slice(0, ta.selectionStart)); return m ? {q:m[2], at:ta.selectionStart - m[2].length - 1} : null; };
+  let act = 0, list = [], q = null, picked = false;
+  const close = () => { menu.classList.add('hide'); list = []; act = 0; };
+  function open(){
+    const was = q?.q; q = query(); if (!q || ta.selectionStart !== ta.selectionEnd) return close();
+    if (q.q !== was) act = 0;
+    const s = q.q.toLowerCase();
+    list = items().filter(i => i.tag.toLowerCase().startsWith(s)); if (!list.length) return close();
+    act = Math.min(act, list.length - 1);
+    menu.innerHTML = list.map((i, k) => `<button type="button" data-k="${k}" class="${k === act ? 'on' : ''}${i.ok ? '' : ' off'}">`
+      + (i.thumb ? `<img src="${escHTML(i.thumb)}" alt="">` : `<span class="ph">${i.icon || '🖼'}</span>`)
+      + `<b>@${i.tag}</b><small>${escHTML(i.ok ? i.sub : (i.why || 'empty - add it first'))}</small></button>`).join('');
+    menu.querySelectorAll('button').forEach(b => b.onmousedown = e => { e.preventDefault(); pick(list[+b.dataset.k]); });
+    // place the menu under the caret: measure the text up to the @ in the mirror
+    mir.innerHTML = escHTML(ta.value.slice(0, q.at)) + '<span>@</span>';
+    const sp = mir.lastChild, x = sp.offsetLeft, y = sp.offsetTop + sp.offsetHeight - ta.scrollTop; paint();
+    menu.style.left = Math.max(0, Math.min(x, wrap.clientWidth - 240)) + 'px'; menu.style.top = (y + 4) + 'px';
+    menu.classList.remove('hide');
+  }
+  function pick(it){
+    if (!it || !q) return;
+    const v = ta.value, end = ta.selectionStart, ins = '@' + it.tag + (/^\s/.test(v.slice(end)) ? '' : ' ');
+    ta.value = v.slice(0, q.at) + ins + v.slice(end);
+    const c = q.at + ins.length; ta.setSelectionRange(c, c); close();
+    picked = true; ta.dispatchEvent(new Event('input', {bubbles:true})); ta.focus();
+  }
+  ta.addEventListener('input', () => { paint(); if (picked) picked = false; else open(); });
+  ta.addEventListener('scroll', () => { mir.scrollTop = ta.scrollTop; });
+  ta.addEventListener('click', open);
+  ta.addEventListener('blur', () => setTimeout(close, 120));
+  ta.addEventListener('keydown', e => {
+    if (menu.classList.contains('hide') || !list.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); act = (act + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length; open(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(list[act]); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  ta.addEventListener('keyup', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Home' || e.key === 'End') open(); });
+  new ResizeObserver(paint).observe(ta);
+  paint();
+  return ta;
+}
+// words: {tag(lowercase): model word}. A known tag missing from words throws why(tag) as the error.
+function resolveTags(text, words, known, why){
+  return text.replace(TAG_RE, (m, t) => { const k = t.toLowerCase(); if (!known.includes(k)) return m;
+    if (words[k] == null) throw new Error(why(t)); return words[k]; });
+}
 
 // ------------------------------------------------------------------ render controls
 function renderModels(){
@@ -367,7 +456,8 @@ function renderAll(){
   $('tabCreate').classList.toggle('on', st.tab==='create'); $('tabEdit').classList.toggle('on', st.tab==='edit');
   $('secPics').classList.toggle('hide', st.tab !== 'edit');
   $('promptLbl').textContent = st.tab === 'edit' ? 'What to change' : 'Prompt';
-  $('prompt').placeholder = st.tab === 'edit' ? 'e.g. Give him a golden crown and a red cape, keep everything else the same.' : 'Describe what you want: subject, materials, colours, lighting, background...';
+  $('prompt').placeholder = st.tab === 'edit' ? 'e.g. Put the crown from @Picture2 on the man in @Picture1, keep everything else the same. (type @ to tag a picture)' : 'Describe what you want: subject, materials, colours, lighting, background...';
+  $('tagBtn').classList.toggle('hide', st.tab !== 'edit'); repaintTags();
   $('restyleWarn').classList.toggle('hide', !(st.tab === 'edit' && model().edit === 'restyle'));
   $('paintBtn').disabled = !st.pic1;
   $('count').textContent = st.count;
@@ -421,6 +511,21 @@ function drawSlot(key){
   renderAll();
 }
 setupSlot($('slot1'), 'pic1'); setupSlot($('slot2'), 'pic2');
+tagBox($('prompt'), () => {
+  const no = st.tab !== 'edit' ? 'only in "Edit picture"' : model().edit === 'restyle' ? 'this model can\'t read tags' : null;
+  return [{tag:'Picture1', sub:'the picture you edit', thumb:st.pic1?.url, ok:!no && !!st.pic1, why:no},
+          {tag:'Picture2', sub:'style / object', thumb:st.pic2?.url, ok:!no && !!st.pic2, why:no}];
+});
+$('tagBtn').onclick = () => { const ta = $('prompt'), c = ta.selectionStart ?? ta.value.length, v = ta.value;
+  const pre = c && !/\s/.test(v[c - 1]) ? ' @' : '@'; ta.value = v.slice(0, c) + pre + v.slice(c); ta.focus();
+  ta.setSelectionRange(c + pre.length, c + pre.length); ta.dispatchEvent(new Event('input')); };
+// Each edit model knows its two pictures by a different name (from their text encoders):
+// Qwen Edit 2511 "Picture N" (TextEncodeQwenImageEditPlus), Qwen-Image 2.1 "<imageN>" (qwen_image21.py), Klein = order only.
+function imageTagWords(m, edit){
+  if (!edit) return null;
+  const w = {qwen:['Picture 1', 'Picture 2'], qwen21:['<image1>', '<image2>'], klein:['image 1', 'image 2']}[m.family];
+  return w ? {picture1:w[0], picture2:st.pic2 ? w[1] : null} : null;
+}
 
 // ------------------------------------------------------------------ mask painting (precise edit)
 const maskCanvas = document.createElement('canvas'); maskCanvas.width = maskCanvas.height = 512;
@@ -474,7 +579,7 @@ $('enhance').onclick = async () => {
   const txt = $('prompt').value.trim();
   const edit = st.tab === 'edit';
   const ask = edit
-    ? `Rewrite this picture-edit instruction so an image editing AI follows it exactly. Keep it to 1-3 sentences, say what to change and that everything else stays the same. Instruction: ${txt || 'improve it'}`
+    ? `Rewrite this picture-edit instruction so an image editing AI follows it exactly. Keep it to 1-3 sentences, say what to change and that everything else stays the same. Copy the tags @Picture1 and @Picture2 exactly as written wherever they appear. Instruction: ${txt || 'improve it'}`
     : `Expand this into one rich image-generation prompt for a polished casual mobile slot game asset: subject, shape, materials, colours, lighting, camera, background. 2-4 sentences, no lists, no quotes. Idea: ${txt || 'a slot game symbol'}`;
   const p = {
     '1': {class_type:'CLIPLoader', inputs:{clip_name:'qwen3.5_4b_bf16.safetensors', type:'stable_diffusion', device:'default'}},
@@ -502,6 +607,13 @@ async function buildPrompt(){
   setIn(p, N.model, 'choice', MODEL_OPTS[m.idx]); setIn(p, N.model, 'index', m.idx);
   setIn(p, N.task, 'choice', TASK_OPTS[edit ? 1 : 0]); setIn(p, N.task, 'index', edit ? 1 : 0);
   let text = $('prompt').value.trim();
+  if (/@picture[12]\b/i.test(text)) {
+    const words = imageTagWords(m, edit);
+    text = resolveTags(text, words || {}, ['picture1', 'picture2'], t =>
+      !edit ? `@${t} only works in "Edit picture" (switch the tab, add the picture).`
+      : !words ? `${m.name} can't read @tags - pick Qwen-Image 2.1, FLUX.2 Klein or Qwen Edit, or remove @${t}.`
+      : `You tagged @${t}, but Picture 2 is empty - add it or remove the tag.`);
+  }
   const sty = styleOf(st.style);
   if (sty && sty.family !== m.family) throw new Error('That style belongs to another model - pick it again.');
   // Z-Image paints made-up trigger tokens ("3dc4r1c4tur3", "g4me_ass3t") into the picture as text: keep only plain words
@@ -558,34 +670,85 @@ async function queue(prompt){
   if (!r.ok || j.error) { const ne = j.node_errors ? Object.values(j.node_errors).map(e => e.errors?.map(x => x.message + ' ' + (x.details||'')).join('; ')).join(' | ') : ''; throw new Error((j.error?.message || 'queue failed') + ' ' + ne); }
   return j.prompt_id;
 }
-const waiters = {};
-function waitFor(id){ return new Promise((res, rej) => waiters[id] = {res, rej, out:{}}); }
+// ------------------------------------------------------------------ jobs that survive page switches (same code in both pages)
+// Pending jobs are kept in sessionStorage (this browser tab only), so going Image -> Video -> Image picks them up again,
+// and Generate stays usable: more jobs just line up in ComfyUI's queue (one GPU = one job at a time).
+// The websocket gives progress; completion is also polled from /history, so a job ends even if its events were missed.
+const waiters = {}, mine = new Map();   // prompt_id -> {label, frac:[from, to]}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const jobsGet = () => { try { return JSON.parse(sessionStorage.getItem(JOBS_KEY) || '[]'); } catch(e) { return []; } };
+const jobsSet = a => { try { sessionStorage.setItem(JOBS_KEY, JSON.stringify(a)); } catch(e) {} };
+const jobPut = j => jobsSet([...jobsGet().filter(x => x.key !== j.key), j]);
+const jobDel = key => jobsSet(jobsGet().filter(x => x.key !== key));
+async function historyOf(id){
+  try { const r = await fetch('/history/' + encodeURIComponent(id), {cache:'no-store'}); if (!r.ok) return undefined; return (await r.json())[id] || null; }
+  catch(e) { return undefined; }   // undefined = server unreachable, null = not finished yet
+}
+function histResult(h){
+  if (h.status?.status_str === 'error') {
+    const ms = h.status.messages || [], er = ms.find(m => m[0] === 'execution_error')?.[1];
+    return new Error(ms.some(m => m[0] === 'execution_interrupted') ? 'Stopped.' : er ? `${er.node_type}: ${er.exception_message}` : 'Failed.');
+  }
+  return h.outputs || {};
+}
+function waitFor(id, label, frac){
+  mine.set(id, {label:label || '', frac:frac || [0, 1]}); updateBusy();
+  return new Promise((res, rej) => {
+    const done = v => { if (!waiters[id]) return; delete waiters[id]; mine.delete(id); updateBusy(); v instanceof Error ? rej(v) : res(v); };
+    waiters[id] = {out:{}, done};
+    (async () => { let gone = 0;
+      while (waiters[id]) {
+        await sleep(2500); if (!waiters[id]) return;
+        const h = await historyOf(id);
+        if (h) return done(histResult(h));
+        if (h === undefined) continue;
+        try { const q = await (await fetch('/queue', {cache:'no-store'})).json();
+          gone = [...q.queue_running, ...q.queue_pending].some(x => x[1] === id) ? 0 : gone + 1;
+          if (gone >= 3) return done(new Error('That job is no longer in ComfyUI (restarted or queue cleared?).'));
+        } catch(e) {}
+      }
+    })();
+  });
+}
+// websocket events for our jobs; returns the job's {label, frac} when the event belongs to one of them
+function jobEvent(type, data){
+  const w = waiters[data?.prompt_id];
+  if (type === 'executed' && w) w.out[data.node] = data.output;
+  if (type === 'execution_success' && w && Object.keys(w.out).length) w.done(w.out);   // else the /history poll picks it up
+  if (type === 'execution_error' && w) w.done(new Error(`${data.node_type}: ${data.exception_message}`));
+  if (type === 'execution_interrupted' && w) w.done(new Error('Stopped.'));
+  return mine.get(data?.prompt_id);
+}
 
 $('gen').onclick = async () => {
   let built; try { built = await buildPrompt(); } catch(e) { return toast(e.message); }
   // more than 4 images run as several batches of up to 4 (12 at once would not fit in 12 GB)
   const chunks = []; for (let left = st.count; left > 0; left -= 4) chunks.push(Math.min(4, left));
-  $('gen').disabled = true; setStatus('Sending...', 0.02);
-  const jobs = [];
+  $('gen').disabled = true; setStatus('Sending...', 0.02);   // only while sending, so a double click can't queue twice
   for (let i = 0; i < chunks.length; i++) {
     const p = JSON.parse(JSON.stringify(built.p)), seed = built.meta.seed + i * 1009;
     setIn(p, N.how, 'value', chunks[i]);
     for (const id of SEED_NODES) setIn(p, id, 'seed', seed);
     for (const id of NOISE_NODES) setIn(p, id, 'noise_seed', seed);
-    const pend = addPending(`${built.meta.model} · ${chunks[i]} image${chunks[i] > 1 ? 's' : ''}`);
-    try { const id = await queue(p); jobs.push({id, pend, seed, wait: waitFor(id)}); } catch(e) { pend.remove(); toast(e.message); }
+    const label = `${built.meta.model} · ${chunks[i]} image${chunks[i] > 1 ? 's' : ''}${chunks.length > 1 ? ` (batch ${i + 1}/${chunks.length})` : ''}`;
+    try { const id = await queue(p); const j = {key:id, id, label, seed, meta:built.meta}; jobPut(j); trackImageJob(j); }
+    catch(e) { toast(e.message); }
   }
-  let done = 0;
-  for (const [i, j] of jobs.entries()) {
-    st.running = j.id; st.batch = jobs.length > 1 ? ` (batch ${i + 1}/${jobs.length})` : '';
-    try {
-      const out = await j.wait; j.pend.remove();
-      for (const im of (out[N.save]?.images || [])) { addResult({...im, ...built.meta, seed: j.seed, t: Date.now()}); done++; }
-    } catch(e) { j.pend.remove(); toast(e.message); }
-  }
-  setStatus(done ? `Done: ${done} image${done > 1 ? 's' : ''}.` : 'Finished, but no image came back.', 1);
-  st.running = null; st.batch = ''; $('gen').disabled = false;
+  $('gen').disabled = false; updateBusy();
 };
+async function trackImageJob(j){
+  const pend = addPending(j.label);
+  try {
+    const out = await waitFor(j.id, j.label); let n = 0;
+    for (const im of (out[N.save]?.images || [])) { addResult({...im, ...j.meta, seed:j.seed, t:Date.now()}); n++; }
+    if (!n) toast('Finished, but no image came back.');
+  } catch(e) { toast(e.message); }
+  pend.remove(); jobDel(j.key); updateBusy();
+}
+function updateBusy(){
+  const n = mine.size; $('gen').textContent = n ? `Generate  ·  ${n} in progress` : 'Generate';
+  if (!n && $('status').textContent !== 'Ready.') setStatus('Done.', 1);
+}
 function setStatus(t, f){ $('status').textContent = t; if (f != null) $('barFill').style.width = Math.round(f * 100) + '%'; }
 
 // ------------------------------------------------------------------ websocket progress
@@ -594,15 +757,11 @@ function connect(){
   const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?clientId=${clientId}`);
   ws.onmessage = ev => {
     if (typeof ev.data !== 'string') return;
-    const {type, data} = JSON.parse(ev.data); const w = waiters[data?.prompt_id];
-    if (type === 'status' && st.running) { const q = data.status?.exec_info?.queue_remaining; if (q > 1) setStatus(`Waiting in queue (${q - 1} ahead)...`); }
-    if (type === 'execution_start' && data.prompt_id === st.running) { nodesDone = 0; setStatus('Starting... (first run of a model loads it from disk)', 0.05); }
-    if (type === 'executing' && data.prompt_id === st.running && data.node) { nodesDone++; }
-    if (type === 'progress' && data.prompt_id === st.running) setStatus(`Generating${st.batch || ''}... step ${data.value}/${data.max}`, 0.1 + 0.85 * data.value / data.max);
-    if (type === 'executed' && w) w.out[data.node] = data.output;
-    if (type === 'execution_success' && w) { w.res(w.out); delete waiters[data.prompt_id]; }
-    if (type === 'execution_error' && w) { w.rej(new Error(`${data.node_type}: ${data.exception_message}`)); delete waiters[data.prompt_id]; }
-    if (type === 'execution_interrupted' && w) { w.rej(new Error('Stopped.')); delete waiters[data.prompt_id]; }
+    const {type, data} = JSON.parse(ev.data); const job = jobEvent(type, data);
+    if (type === 'status' && mine.size) { const q = data.status?.exec_info?.queue_remaining; if (q > 1) setStatus(`${mine.size} of yours in the queue (${q} jobs in ComfyUI)...`); }
+    if (type === 'execution_start' && job) { nodesDone = 0; setStatus(`${job.label}: starting... (first run of a model loads it from disk)`, 0.05); }
+    if (type === 'executing' && job && data.node) { nodesDone++; }
+    if (type === 'progress' && job) setStatus(`${job.label}: step ${data.value}/${data.max}`, 0.1 + 0.85 * data.value / data.max);
   };
   ws.onclose = () => setTimeout(connect, 2000);
 }
@@ -743,6 +902,8 @@ $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlK
     if (!SIZES.some(s => s[1] === st.size)) st.size = 1.0;
   } catch(e) { toast('Could not reach ComfyUI: ' + e.message); }
   renderAll(); renderGallery(); connect();
+  for (const j of jobsGet()) trackImageJob(j);   // jobs still running from before a page switch / reload
+  if (jobsGet().length) setStatus(`Picked up ${jobsGet().length} job${jobsGet().length > 1 ? 's' : ''} still running.`, 0.05);
 })();
 </script>
 </body>
