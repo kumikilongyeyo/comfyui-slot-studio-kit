@@ -136,6 +136,25 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .tiles .slot{width:96px;height:96px;aspect-ratio:auto;font-size:11px;border-radius:10px}
 .tiles .slot .cap{font-size:10px}
 .tiles .slot.addref{border-style:dashed;color:var(--accent)}
+/* picture size badge on each tile (click = use this picture's size for the result) */
+.slot .dim{position:absolute;right:4px;bottom:6px;background:#000b;color:#fff;padding:1px 5px;border-radius:6px;font-size:9.5px;z-index:3;border:0;line-height:1.5;cursor:pointer}
+.slot .dim:hover,.slot .dim.on{background:var(--accent)}
+/* dimension menu */
+.brow .chipbtn{white-space:nowrap}
+.brow{position:relative} #aspectPop{position:static}   /* dimension menu spans the whole row, never wider than the panel */
+.brow .pop .menu.dimmenu{left:0;right:0;min-width:0}
+.dimmenu .dimrow{display:flex;align-items:center;gap:8px}
+.dimmenu .dimrow img{width:26px;height:26px;object-fit:cover;border-radius:5px;background:var(--media);flex:none}
+.dimmenu .dimrow b{display:inline!important}
+.dimmenu .px{margin-left:auto;color:var(--dim);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dimmenu .cust{display:flex;align-items:center;gap:6px;padding:4px 10px 8px}
+.dimmenu .cust input{width:74px;padding:5px 6px}
+.dimmenu .cust .ghost{width:auto;padding:5px 9px;background:var(--chip);border:1px solid var(--line);border-radius:8px;font-size:12.5px}
+.dimmenu .cust .ghost.cset{background:var(--accent);border-color:var(--accent);color:#fff}
+.dimmenu .fits{display:flex;gap:6px;padding:2px 10px 8px;flex-wrap:wrap}
+.dimmenu .fits .chip{width:auto;padding:4px 10px;font-size:12px;background:var(--chip);border:1px solid var(--line);border-radius:999px;color:var(--text)}
+.dimmenu .fits .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.dimnote{color:var(--dim);font-size:11.5px;margin-top:6px}
 .pbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px}
 .pbox:focus-within{border-color:var(--accent)}
 .pbox textarea{border:0;background:none;min-height:96px;padding:4px}
@@ -188,9 +207,10 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
       </div>
       <div class="brow" style="margin-top:10px">
         <div class="stepper" title="Number of images (1-12)"><button id="cMinus">−</button><span id="count">1</span><button id="cPlus">+</button></div>
-        <div class="pop" id="aspectPop"><button class="chipbtn" id="aspectBtn" title="Shape"></button><div class="menu hide" id="aspects"></div></div>
-        <div class="pop"><button class="chipbtn" id="sizeBtn" title="Size"></button><div class="menu hide" id="sizes"></div></div>
+        <div class="pop" id="aspectPop"><button class="chipbtn" id="aspectBtn" title="Dimensions of the result: a shape, the size of one of your pictures, or your own width x height"></button><div class="menu dimmenu hide" id="aspects"></div></div>
+        <div class="pop" id="sizePop"><button class="chipbtn" id="sizeBtn" title="Size"></button><div class="menu hide" id="sizes"></div></div>
       </div>
+      <div class="dimnote" id="dimNote"></div>
       <div class="avoid"><span>Avoid</span><input type="text" id="neg" value="text, watermark, logo, blurry, lowres, deformed, extra limbs" title="Used by the SDXL models"></div>
       <div class="warnbox hide" id="restyleWarn">This model can't follow edit instructions: it redraws your picture (restyle) at the strength set in Advanced. For edits use FLUX.2 Klein or Qwen Edit.</div>
     </div>
@@ -281,6 +301,7 @@ const CAMS = [['Front',0,0],['¾ right',45,0],['Right',90,0],['Back',180,0],['Le
 
 // ------------------------------------------------------------------ state
 const st = { tab:'create', model:'qwen21', style:'None', aspect:'1:1', size:1.0, count:1,
+             dimE:'keep', dimRef:1, dimC:'aspect', cw:1024, ch:1024, fit:'crop', exact:false,
              pic1:null, pic2:null, more:[], painted:false, available:new Set(), loras:new Set(), running:null };
 const $ = id => document.getElementById(id);
 // clientId stays the same for this browser tab (sessionStorage), so after Video -> Image the websocket gets this
@@ -291,7 +312,8 @@ let API = null, clientId = (() => { try { let c = sessionStorage.getItem('studio
   catch(e) { return 'studio-' + Math.random().toString(36).slice(2); } })();
 try { Object.assign(st, JSON.parse(localStorage.getItem('studio.prefs') || '{}'), {running:null, pic1:null, pic2:null, more:[], painted:false, available:new Set(), loras:new Set()}); } catch(e) {}
 try { if (!localStorage.getItem('studio.q21default')) { st.model = 'qwen21'; st.style = 'None'; localStorage.setItem('studio.q21default', '1'); } } catch(e) {}
-const savePrefs = () => { try { localStorage.setItem('studio.prefs', JSON.stringify({tab:st.tab, model:st.model, style:st.style, aspect:st.aspect, size:st.size, count:st.count})); } catch(e) {} };
+const savePrefs = () => { try { localStorage.setItem('studio.prefs', JSON.stringify({tab:st.tab, model:st.model, style:st.style, aspect:st.aspect, size:st.size, count:st.count,
+  dimE:st.dimE, dimRef:st.dimRef, dimC:st.dimC, cw:st.cw, ch:st.ch, fit:st.fit, exact:st.exact})); } catch(e) {} };
 
 function toast(msg, ok){ const t=$('toast'); t.textContent=msg; t.className='toast'+(ok?' ok':''); t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none', ok?2500:7000); }
 const model = () => MODELS.find(m => m.id === st.model);
@@ -393,8 +415,14 @@ function closeMenus(){ document.querySelectorAll('.menu').forEach(m => m.classLi
 function toggleMenu(id){ const m = $(id), open = m.classList.contains('hide'); closeMenus(); if (open) m.classList.remove('hide'); }
 document.addEventListener('click', e => { if (!e.target.closest('.pop')) closeMenus(); });
 $('modelBtn').onclick = () => toggleMenu('models');
-$('aspectBtn').onclick = () => toggleMenu('aspects');
-$('sizeBtn').onclick = () => toggleMenu('sizes');
+// open a row menu up or down, whichever side of the scrolling panel has more room (it is clipped by the panel)
+function placeMenu(id, btn){
+  const r = $(btn).getBoundingClientRect(), box = document.querySelector('aside .scroll').getBoundingClientRect();
+  const below = box.bottom - r.bottom - 10, above = r.top - box.top - 10, up = below < 300 && above > below;
+  $(id).classList.toggle('up', up); $(id).style.maxHeight = Math.max(160, Math.min(420, up ? above : below)) + 'px';
+}
+$('aspectBtn').onclick = () => { placeMenu('aspects', 'aspectBtn'); toggleMenu('aspects'); };
+$('sizeBtn').onclick = () => { placeMenu('sizes', 'sizeBtn'); toggleMenu('sizes'); };
 $('clearPrompt').onclick = () => { $('prompt').value = ''; $('prompt').focus(); };
 // Style LoRAs come from styles.json (written by "Install LoRAs from Downloads" / sort_loras.py).
 let STYLE_LIST = [];
@@ -422,25 +450,99 @@ function renderStyles(){
 }
 const arIcon = (w, h) => { const sc = 13 / Math.max(w, h); return `<i class="ar" style="width:${Math.round(w*sc)}px;height:${Math.round(h*sc)}px;margin:0"></i>`; };
 const AR_NAMES = {'1:1':'Square','3:4':'Portrait','4:3':'Standard','2:3':'Portrait photo','3:2':'Photo','9:16':'Social story','16:9':'Widescreen','21:9':'Ultrawide'};
-function renderAspects(){
-  const box = $('aspects'); box.innerHTML = '';
-  for (const [k,,w,h] of ASPECTS){
-    const b = document.createElement('button'); b.className = k === st.aspect ? 'on' : '';
-    b.innerHTML = `${arIcon(w,h)} &nbsp;<b style="display:inline">${k}</b> <span>${AR_NAMES[k]}</span>`;
-    b.onclick = () => { st.aspect = k; closeMenus(); renderAll(); }; box.appendChild(b);
+// ------------------------------------------------------------------ dimensions
+// Create: a shape (at 1K / 1.5K / 2K) or Custom W x H. Edit: Picture 1's own shape (default), the size of any
+// reference picture (its shape at 1K-2K, or "Original" = its exact pixels), a shape, or Custom W x H.
+// Edits turn Picture 1 itself into that size (crop / fit with white / stretch), because Qwen-Image 2.1, Klein and
+// Qwen Edit draw the result on Picture 1's size (Qwen 2.1: any other latent size shifts the edit).
+const MAX_PX = 2048 * 2048;                                     // 12 GB video memory ceiling
+const dimStep = () => model().family === 'qwen21' ? 32 : 16;    // Qwen 2.1 rounds its references to x32
+const snap = (v, s) => Math.max(s * 4, Math.round(v / s) * s);
+function atMP(w, h, mp, s){ const k = Math.sqrt(mp * 1048576 / (w * h)); return [snap(w * k, s), snap(h * k, s)]; }
+const picOf = n => [st.pic1, st.pic2, ...st.more][n - 1] || null;
+const picWH = p => p?.img?.naturalWidth ? [p.img.naturalWidth, p.img.naturalHeight] : null;
+// -> {kind:'pic'|'aspect'|'custom', n, w, h, capped, sameShape, label}
+function targetDims(){
+  const s = dimStep(), edit = st.tab === 'edit';
+  const mode = edit ? st.dimE : st.dimC === 'custom' ? 'custom' : 'aspect';
+  let r;
+  if (mode === 'keep' || mode === 'ref') {
+    let n = mode === 'keep' ? 1 : st.dimRef; if (!picWH(picOf(n))) n = 1;
+    const wh = picWH(picOf(n));
+    r = {kind:'pic', n, w:0, h:0, label:'Picture ' + n};
+    if (wh) {
+      let [w, h] = st.exact ? [snap(wh[0], s), snap(wh[1], s)] : atMP(wh[0], wh[1], st.size, s);
+      if (w * h > MAX_PX) { [w, h] = atMP(wh[0], wh[1], 4, s); r.capped = true; }
+      Object.assign(r, {w, h}, st.exact && !r.capped ? {ow:wh[0], oh:wh[1]} : {});
+    }
+  } else if (mode === 'custom') {
+    const cw = Math.round(Math.min(4096, Math.max(64, +st.cw || 1024))), ch = Math.round(Math.min(4096, Math.max(64, +st.ch || 1024)));
+    let w = snap(cw, s), h = snap(ch, s);
+    r = {kind:'custom', label:'Custom'};
+    if (w * h > MAX_PX) { [w, h] = atMP(w, h, 4, s); r.capped = true; }
+    Object.assign(r, {w, h}, r.capped ? {} : {ow:cw, oh:ch});
+  } else {
+    const a = ASPECTS.find(x => x[0] === st.aspect) || ASPECTS[0], [w, h] = atMP(a[2], a[3], st.size, s);
+    r = {kind:'aspect', w, h, label:a[0]};
   }
-  const a = ASPECTS.find(x => x[0] === st.aspect);
-  $('aspectBtn').innerHTML = `${arIcon(a[2], a[3])} ${a[0]} ▾`;
-  $('aspectPop').classList.toggle('hide', st.tab === 'edit');   // edits keep the picture's own shape
+  const p1 = picWH(st.pic1);
+  r.sameShape = !edit || !p1 || !r.w || Math.abs(r.w / r.h - p1[0] / p1[1]) < 0.02;
+  // ow x oh = the pixels you get. Models need x16 / x32, so e.g. 1920x1080 is made at 1920x1088 and trimmed after.
+  if (!r.ow) { r.ow = r.w; r.oh = r.h; }
+  return r;
+}
+const FITS = [['crop','Crop to fill','Cuts off the edges that do not fit (centre)'],['fit','Fit + white bars','Whole picture, white fills the rest'],['stretch','Stretch','Squeezes the picture into the shape']];
+function renderAspects(){
+  const box = $('aspects'), edit = st.tab === 'edit', d = targetDims(), s = dimStep(); box.innerHTML = '';
+  const mode = edit ? st.dimE : st.dimC === 'custom' ? 'custom' : 'aspect';
+  // re-rendering removes the clicked element, so stop the click before the "click outside closes menus" handler
+  const add = (html, on, fn) => { const b = document.createElement('button'); b.className = on ? 'on' : ''; b.innerHTML = html;
+    b.onclick = e => { e.stopPropagation(); fn(); closeMenus(); renderAll(); }; box.appendChild(b); };
+  const grp = t => box.insertAdjacentHTML('beforeend', `<div class="grp">${t}</div>`);
+  if (edit) {
+    const pics = [st.pic1, st.pic2, ...st.more];
+    if (pics.some(Boolean)) grp('Same size as a picture');
+    pics.forEach((p, i) => { if (!p) return; const n = i + 1, wh = picWH(p);
+      add(`<span class="dimrow"><img src="${p.url}" alt=""><b>Picture ${n}</b>${n === 1 ? '<span>&nbsp;keep shape</span>' : ''}<span class="px">${wh ? wh[0] + '×' + wh[1] : ''}</span></span>`,
+        d.kind === 'pic' && d.n === n, () => { if (n === 1) st.dimE = 'keep'; else { st.dimE = 'ref'; st.dimRef = n; } }); });
+  }
+  grp('Shape');
+  for (const [k,,w,h] of ASPECTS) { const [pw, ph] = atMP(w, h, st.size, s);
+    add(`<span class="dimrow">${arIcon(w, h)}<b>${k}</b><span>${AR_NAMES[k]}</span><span class="px">${pw}×${ph}</span></span>`,
+      mode === 'aspect' && k === st.aspect, () => { st.aspect = k; if (edit) st.dimE = 'aspect'; else st.dimC = 'aspect'; }); }
+  grp('Custom size (px)');
+  const c = document.createElement('div'); c.className = 'cust';
+  c.innerHTML = `<input type="number" class="cw" min="64" max="4096" step="${s}" value="${st.cw}" title="Width (px)"> × <input type="number" class="ch" min="64" max="4096" step="${s}" value="${st.ch}" title="Height (px)">`
+    + `<button class="ghost cswap" title="Swap width and height">⇄</button><button class="ghost cset">Use</button>`;
+  box.appendChild(c);
+  const use = e => { e?.stopPropagation(); st.cw = +c.querySelector('.cw').value || 1024; st.ch = +c.querySelector('.ch').value || 1024;
+    if (edit) st.dimE = 'custom'; else st.dimC = 'custom'; closeMenus(); renderAll(); };
+  c.querySelector('.cset').onclick = use;
+  c.querySelector('.cswap').onclick = e => { e.stopPropagation(); const a = c.querySelector('.cw'), b = c.querySelector('.ch'); [a.value, b.value] = [b.value, a.value]; };
+  c.querySelectorAll('input').forEach(i => i.onkeydown = e => { if (e.key === 'Enter') use(e); });
+  if (edit) {
+    grp('When the shape differs from Picture 1');
+    const f = document.createElement('div'); f.className = 'fits';
+    for (const [k, n, t] of FITS) { const b = document.createElement('button'); b.className = 'chip' + (st.fit === k ? ' on' : ''); b.textContent = n; b.title = t;
+      b.onclick = e => { e.stopPropagation(); st.fit = k; renderAll(); }; f.appendChild(b); }
+    box.appendChild(f);
+  }
+  $('aspectBtn').innerHTML = `${d.w ? arIcon(d.w, d.h) : arIcon(1, 1)} ${d.label}${d.w ? ` · ${d.ow}×${d.oh}` : ''} ▾`;
+  const notes = [];
+  if (d.capped) notes.push('Scaled down to about 4 MP (2048×2048 area) so it fits in 12 GB of video memory.');
+  if (edit && d.w && !d.sameShape) notes.push({crop:'Picture 1 is cropped to this shape (centre).', fit:'Picture 1 fits inside, white fills the rest.', stretch:'Picture 1 is stretched to this shape.'}[st.fit]);
+  $('dimNote').textContent = notes.join(' '); $('dimNote').classList.toggle('hide', !notes.length);
+  // size badges on the picture tiles: highlight the one the result size comes from
+  document.querySelectorAll('.slot .dim').forEach(b => b.classList.toggle('on', edit && d.kind === 'pic' && +b.dataset.n === d.n));
 }
 function renderSizes(){
-  const box = $('sizes'); box.innerHTML = '';
-  for (const [n,v,hint] of SIZES){
-    const b = document.createElement('button'); b.className = v === st.size ? 'on' : '';
-    b.innerHTML = `<b style="display:inline">${n}</b> <span>${hint}</span>`;
-    b.onclick = () => { st.size = v; closeMenus(); renderAll(); }; box.appendChild(b);
-  }
-  $('sizeBtn').textContent = ((SIZES.find(s => s[1] === st.size) || SIZES[0])[0]) + ' ▾';
+  const box = $('sizes'), d = targetDims(), pic = d.kind === 'pic'; box.innerHTML = '';
+  const add = (n, hint, on, fn) => { const b = document.createElement('button'); b.className = on ? 'on' : '';
+    b.innerHTML = `<b style="display:inline">${n}</b> <span>${hint}</span>`; b.onclick = e => { e.stopPropagation(); fn(); closeMenus(); renderAll(); }; box.appendChild(b); };
+  if (pic) { const wh = picWH(picOf(d.n)); add('Original', wh ? `${wh[0]}×${wh[1]}, Picture ${d.n}'s own pixels` : 'the picture\'s own pixels', st.exact, () => st.exact = true); }
+  for (const [n, v, hint] of SIZES) add(n, hint, !(pic && st.exact) && v === st.size, () => { st.size = v; st.exact = false; });
+  $('sizeBtn').textContent = (pic && st.exact ? 'Original' : (SIZES.find(s => s[1] === st.size) || SIZES[0])[0]) + ' ▾';
+  $('sizePop').classList.toggle('hide', d.kind === 'custom');   // custom = exact pixels already
 }
 function renderCam(){
   const isQ = model().family === 'qwen' && st.tab === 'edit';
@@ -560,18 +662,29 @@ function drawSlot(key){
   const el = $(key === 'pic1' ? 'slot1' : 'slot2'), p = st[key];
   if (!p) { el.innerHTML = key==='pic1' ? '<div>＋<br>Picture 1<br><small>to edit</small></div>' : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; }
   else {
-    el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>`;
+    el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>${dimBadge(p, key==='pic1'?1:2)}`;
     if (key === 'pic1') el.appendChild(maskCanvas);
     el.querySelector('.x').onclick = e => { e.stopPropagation(); removeRef(key); };
+    wireBadge(el);
   }
   drawMore();
+}
+// W x H badge on a tile; clicking it makes the result exactly that picture's size
+const dimBadge = (p, n) => { const wh = picWH(p); return wh ? `<button class="dim" data-n="${n}" title="Picture ${n} is ${wh[0]}×${wh[1]} px - click to make the result this size">${wh[0]}×${wh[1]}</button>` : ''; };
+function wireBadge(el){
+  const b = el.querySelector('.dim'); if (!b) return;
+  b.onclick = e => { e.stopPropagation(); const n = +b.dataset.n;
+    if (n === 1) st.dimE = 'keep'; else { st.dimE = 'ref'; st.dimRef = n; }
+    st.exact = true; renderAll(); const d = targetDims(); toast(`Result size: Picture ${d.n} · ${d.ow}×${d.oh}`, true); };
+  b.ondblclick = e => e.stopPropagation();
 }
 function drawMore(){
   const box = $('moreSlots'); box.innerHTML = '';
   st.more.forEach((p, i) => {
     const d = document.createElement('div'); d.className = 'slot';
-    d.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${i + 3}</span>`;
+    d.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${i + 3}</span>${dimBadge(p, i + 3)}`;
     d.querySelector('.x').onclick = e => { e.stopPropagation(); removeRef(i); };
+    wireBadge(d);
     setupSlot(d, i); box.appendChild(d);
   });
   const n = refCount();
@@ -770,8 +883,25 @@ async function buildPrompt(){
   setIn(p, N.cam, 'horizontal_angle', +$('camH').value); setIn(p, N.cam, 'vertical_angle', +$('camV').value); setIn(p, N.cam, 'zoom', +$('camZ').value);
   if (cam && !text) setIn(p, N.prompt, 'value', '');
   // size, count, strength
-  const ar = ASPECTS.find(a => a[0] === st.aspect);
+  const ar = ASPECTS.find(a => a[0] === st.aspect) || ASPECTS[0], dim = targetDims();
   setIn(p, N.res, 'aspect_ratio', ar[1]); setIn(p, N.res, 'megapixels', st.size); setIn(p, N.editMp, 'value', st.size);
+  if (!edit) {
+    // every text-to-image latent reads width/height from node 13: give them the exact pixels shown on the chip
+    for (const n of Object.values(p)) for (const [k, v] of Object.entries(n.inputs))
+      if (Array.isArray(v) && String(v[0]) === N.res && (v[1] === 0 || v[1] === 1)) n.inputs[k] = v[1] === 0 ? dim.w : dim.h;
+  } else if (dim.w) {
+    // Picture 1 (node 27, read by every edit model, its size = the result's size) becomes exactly W x H
+    const tf = src => st.fit === 'fit' && !dim.sameShape
+      ? {class_type:'ResizeAndPadImage', inputs:{image:src, target_width:dim.w, target_height:dim.h, padding_color:'white', interpolation:'lanczos'}}
+      : {class_type:'ImageScale', inputs:{image:src, upscale_method:'lanczos', width:dim.w, height:dim.h, crop:st.fit === 'stretch' && !dim.sameShape ? 'disabled' : 'center'}};
+    p['27'] = tf(['26', 0]);
+    // the painted mask gets the same crop / fit / stretch, so "only change painted area" still lines up
+    if (st.painted && p['157']) {
+      p['980'] = {class_type:'MaskToImage', inputs:{mask:['4', 1]}}; p['981'] = tf(['980', 0]);
+      p['982'] = {class_type:'ImageToMask', inputs:{channel:'red', image:['981', 0]}}; p['157'].inputs.mask = ['982', 0];
+    }
+    setIn(p, N.editMp, 'value', Math.min(4, Math.max(0.25, +(dim.w * dim.h / 1048576).toFixed(2))));   // Picture 2 scaled to match
+  }
   setIn(p, N.how, 'value', st.count); setIn(p, N.strength, 'value', +$('strength').value);
   // styles: every LoRA box off, then the chosen one on
   for (const id of [N.loraZ, N.loraK, N.loraQ]) setIn(p, id, 'strength_model', 0);
@@ -796,6 +926,11 @@ async function buildPrompt(){
   for (const id of SEED_NODES) setIn(p, id, 'seed', seed);
   for (const id of NOISE_NODES) setIn(p, id, 'noise_seed', seed);
   setIn(p, N.save, 'filename_prefix', `STUDIO/${m.id}_${stamp()}`);
+  // exact pixels asked for (Custom / Original) that the model can't make directly: trim the few rounding pixels
+  if (dim.w && (dim.ow !== dim.w || dim.oh !== dim.h) && p[N.save]) {
+    p['985'] = {class_type:'ImageScale', inputs:{image:p[N.save].inputs.images, upscale_method:'lanczos', width:dim.ow, height:dim.oh, crop:'center'}};
+    p[N.save].inputs.images = ['985', 0];
+  }
   return {p, meta:{text: $('prompt').value.trim(), model: m.name, style: sty ? sty.name : 'None', styleFile: st.style, seed, edit}};
 }
 async function queue(prompt){
