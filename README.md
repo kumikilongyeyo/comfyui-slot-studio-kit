@@ -50,8 +50,15 @@ finished files are skipped and half-done files resume.
   * Up to **10 reference pictures** (＋ tile). Image: Qwen-Image 2.1 and Klein use all 10, Qwen Edit the first 3.
     Video: up to 10 added images - with no start/end image they make a **References** video (H3 reference-to-video);
     copy motion / new camera use them as extra references. References stay when you switch Image <-> Video.
-  * **Enhance prompt** checkbox: the local Qwen 3.5 4B rewrites the prompt inside the same job (clearer, translated to
-    English, tags kept); the rewritten text shows on the result (✨, hover). Unticked = sent exactly as typed.
+  * **Enhance prompt** checkbox / **✨ AI prompt**: the local Qwen 3.5 4B turns a rough idea into a prompt written the way
+    the **picked model** reads best (Qwen-Image 2.1 long exact paragraph, Klein short prose, Z-Image concrete description,
+    SDXL comma tags; on Video it follows the shot type). Translated to English, tags kept; the rewritten text shows on the
+    result (✨, hover). Unticked = sent exactly as typed.
+  * **References in Create**: with Qwen-Image 2.1, Klein or Qwen Edit, added pictures guide a brand-new picture at the
+    shape and size you picked (tag them with `@Picture1`…).
+  * **✂ BG** on an image result: transparent PNG cut-out (BiRefNet), added as a new result.
+  * **🎞 Frames** on a video result: step frame by frame (← → , Shift = 10, Space), then **Edit in Image** (frame becomes
+    Picture 1), **Use as start image**, **Remove BG** or save the frame as PNG.
   * Type **@** in a prompt to tag a reference (`@Picture1`…`@Picture10`; video: `@Start`, `@End`, `@Image1`…, `@Video`).
     The page swaps each tag for the name the chosen model uses for that picture (`Picture 2` for Qwen Edit,
     `<image2>` for Qwen-Image 2.1, `image 2` for Klein, `<Picture 1>` / `<Video 1>` for MiniMax H3).

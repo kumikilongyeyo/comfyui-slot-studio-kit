@@ -145,6 +145,24 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 @media (max-width:900px){.selbar,.selhint{left:50%}}
 .hide{display:none!important}
 @media (max-width:900px){.app{grid-template-columns:1fr;height:auto}.gallery{min-height:60vh}}
+
+/* frame viewer */
+.fv{position:fixed;inset:0;background:#0f172acc;z-index:60;display:flex;align-items:center;justify-content:center;padding:16px}
+.fv.hide{display:none}
+.fvbox{background:#fff;border-radius:14px;width:min(1100px,100%);max-height:100%;display:flex;flex-direction:column;gap:10px;padding:12px;box-shadow:0 20px 60px #0006}
+.fvhead{display:flex;align-items:center;gap:10px} .fvhead b{font-size:15px} .fvhead #fvInfo{color:var(--dim);font-size:12px;flex:1;font-variant-numeric:tabular-nums}
+.fvstage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border-radius:10px;overflow:hidden;
+  background:#fff conic-gradient(#e9ebef 25%,#fff 0 50%,#e9ebef 0 75%,#fff 0) 0 0/16px 16px}
+.fvstage video,.fvstage img{max-width:100%;max-height:58vh;display:block}
+.fvstage img.cut{position:absolute;inset:0;margin:auto}
+.fvctl{display:flex;align-items:center;gap:8px} .fvctl input{flex:1}
+.fvctl button,.fvacts button{white-space:nowrap}
+.fvstrip{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px}
+.fvstrip canvas{height:54px;border-radius:5px;cursor:pointer;outline:2px solid transparent;flex:none}
+.fvstrip canvas.on{outline-color:var(--accent)}
+.fvacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fvacts .pri{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fvacts small{color:var(--dim);margin-left:auto}
 </style>
 </head>
 <body>
@@ -202,7 +220,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
     <div class="sec">
       <div id="shotBox"><div class="lbl">Shot <button class="plus" id="addShot" title="Add another shot">+</button></div>
       <div class="shots" id="shots"></div></div>
-      <label class="enh" title="On: every Generate rewrites your description first (clearer, translated to English, tags kept). Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> ✨ Enhance prompt <small>rewrite + translate to English</small></label>
+      <label class="enh" title="On: every Generate rewrites your description for MiniMax H3, tuned to the shot type (picture, motion copy, references...), translated to English, tags kept. Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> ✨ Enhance prompt <small>rewrite + translate to English</small></label>
       <div class="soundline" id="soundLine"><span>🔊 Sound</span><input type="text" id="soundText" placeholder="music, effects, voices - e.g. upbeat casino jingle, coins clinking"></div>
     </div>
 
@@ -238,6 +256,18 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 </main>
 </div>
 <div class="toast" id="toast"></div>
+<div class="fv hide" id="fv"><div class="fvbox">
+  <div class="fvhead"><b>Frames</b><span id="fvInfo"></span><button class="ghost" id="fvClose" title="Close (Esc)">✕</button></div>
+  <div class="fvstage"><video id="fvVid" muted playsinline preload="auto"></video><img id="fvCut" class="cut hide" alt=""></div>
+  <div class="fvctl"><button class="ghost" id="fvPrev" title="Previous frame (←)">◀</button><input type="range" id="fvSlider" min="0" value="0" step="1">
+    <button class="ghost" id="fvNext" title="Next frame (→)">▶</button><button class="ghost" id="fvPlay" title="Play / pause (Space)">▶ Play</button></div>
+  <div class="fvstrip" id="fvStrip"></div>
+  <div class="fvacts"><button class="pri" id="fvEdit" title="Open this frame in the Image page as Picture 1">✎ Edit in Image</button>
+    <button class="ghost" id="fvStart" title="Use this frame as the Start image of a new video">Use as start image</button>
+    <button class="ghost" id="fvBg" title="Cut out the subject (transparent PNG, BiRefNet)">✂ Remove BG</button>
+    <button class="ghost" id="fvDl" title="Save this frame as PNG">⬇ PNG</button><small>← → step one frame · Shift = 10 · Space play</small></div>
+</div></div>
+
 
 <script>
 // Node ids of the panel in workflow 17_VIDEO_All_In_One (video_api.json is its API export).
@@ -673,8 +703,22 @@ function addEnhance(p, textNode, ask, imageRef, prefix, maxLen){
 }
 const enhText = out => { const t = out?.[ENH_NODE]?.text; return Array.isArray(t) ? t[0] : t || null; };
 const setIn = (p, id, k, v) => { if (p[id]) p[id].inputs[k] = v; };
-const VIDEO_ASK = 'Rewrite this into one clear, specific prompt for an AI video model: who/what is in the shot, what they do step by step, how the camera moves, the mood and lighting. '
-  + 'Keep lines that start with "SHOT 1:", "SHOT 2:" and "Audio:" as separate lines in the same order (rewrite their content). ' + ENH_RULES + '\n\nText: ';
+// Model-aware Enhance for MiniMax H3: the guide depends on what the shot already has (start/end picture, pose video,
+// references), so the rewrite spends its words on what the model still needs to be told.
+const VIDEO_GUIDE = {
+  0: 'The start picture already shows the look, so do NOT re-describe it in detail: describe the MOTION - what moves, in what order, how fast, '
+    + 'how the camera moves (static, slow push-in, orbit, pan) and any light change. If <Picture 2> (end picture) is mentioned, describe how the shot travels to it. ',
+  1: 'There is no picture, so describe the whole shot: subject and its look, setting, the action beat by beat, camera framing and move, lighting, mood and art style. ',
+  2: 'The moves come from the pose video. Say that the character from the start picture performs them, then describe the setting, camera and lighting. Keep it short. ',
+  3: 'Keep the subject and its motion from the video; describe the new place from the added picture, its light and how the subject sits in it. ',
+  4: 'Keep everything in the video; describe only the new camera move (type, direction, speed, start and end framing). ',
+  5: 'Use the reference pictures by their tags (<Picture 1>, <Picture 2>...): say who or what each one is, what they do together, the setting, camera and lighting. ',
+};
+const videoAsk = m => 'Rewrite the text below into the best possible prompt for MiniMax H3, an AI video model. Write in present tense as one continuous shot. '
+  + (VIDEO_GUIDE[m] ?? VIDEO_GUIDE[1])
+  + 'Name concrete motion verbs and timing words (slowly, then, suddenly). Keep lines that start with "SHOT 1:", "SHOT 2:" and "Audio:" as separate lines in the same order (rewrite their content; '
+  + 'for Audio describe the actual sounds and music). ' + ENH_RULES
+  + ' The rules above are for you only: never mention them, the model name or the word "prompt" in your answer.\n\nText: ';
 // Added images 2..10 go into the API graph here (workflow 17 has one "picture B" box). Each gets 17's clean-up
 // (alpha over white). Copy motion -> node 54 ref_image_2.., new camera -> node 109 ref_image_2..; references mode -> a
 // new MiniMaxH3ReferenceToVideo with every image, wired into mode 4's switches (121 conditioning, 129 latent), so it
@@ -714,7 +758,7 @@ function buildPrompt(){
   if (!text && (m <= 1 || m === 5)) throw new Error('Describe the shot first.');
   const desc = resolveTags(text, videoTagWords(m), VTAGS, videoTagWhy(m));
   setIn(p, N.desc, 'value', desc);
-  if ($('autoEnh').checked && desc) addEnhance(p, N.desc, VIDEO_ASK + desc, st.start ? [N.start, 0] : null, '', 360);
+  if ($('autoEnh').checked && desc) addEnhance(p, N.desc, videoAsk(m) + desc, st.start ? [N.start, 0] : null, '', 360);
   setIn(p, N.loop, 'value', !!(st.start && !st.end && $('loop').checked));
   setIn(p, N.cam, 'horizontal_angle', st.cam[0]); setIn(p, N.cam, 'vertical_angle', st.cam[1]); setIn(p, N.cam, 'zoom', st.cam[2]);
   setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === st.ar)[1]); setIn(p, N.res, 'megapixels', st.q);
@@ -798,7 +842,7 @@ function shotPrompt(s, common, seed, o){
     ? `Panel ${s.panel + 1} is cut from the next one, so @End means nothing in its shot - join them or remove the tag.`
     : `Storyboard shots only know @Start (this panel) and @End (the next panel) - remove @${t}.`);
   setIn(p, N.desc, 'value', text);
-  if ($('autoEnh').checked && text) addEnhance(p, N.desc, VIDEO_ASK + text, [N.start, 0], '', 360);
+  if ($('autoEnh').checked && text) addEnhance(p, N.desc, videoAsk(0) + text, [N.start, 0], '', 360);
   setIn(p, N.res, 'aspect_ratio', ARS.find(a => a[0] === o.ar)[1]); setIn(p, N.res, 'megapixels', o.q);
   setIn(p, N.dur, 'value', s.dur); setIn(p, N.seed, 'noise_seed', seed); setIn(p, N.sound, 'value', o.sound);
   setIn(p, N.save, 'filename_prefix', `video/STUDIO/board_shot_${stamp()}`);
@@ -900,6 +944,101 @@ async function lastFrame(r){
   const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v, 0, 0);
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
+// ------------------------------------------------------------------ frame viewer (🎞 Frames on a result card)
+// Step through a result frame by frame (H3 = 24 fps), then send the frame to the Image page (Edit, Picture 1), use it as
+// the Start image, cut its background out (BiRefNet, transparent PNG) or save it. "Edit in Image" uploads the frame and
+// leaves a studio.handoff note in localStorage that the Image page picks up on load.
+const FV = {r:null, fps:24, n:1, i:0, cut:null};
+const fvV = () => $('fvVid');
+const nearestThumb = th => th.reduce((b, c) => Math.abs(+c.dataset.i - FV.i) < Math.abs(b - FV.i) ? +c.dataset.i : b, -1e9);
+function fvShow(i){
+  FV.i = Math.max(0, Math.min(FV.n - 1, i)); FV.cut = null; $('fvCut').classList.add('hide'); fvV().style.visibility = '';
+  const v = fvV(); v.currentTime = Math.min(v.duration - 0.001, (FV.i + 0.5) / FV.fps);
+  $('fvSlider').value = FV.i;
+  $('fvInfo').textContent = `Frame ${FV.i + 1} / ${FV.n} · ${(FV.i / FV.fps).toFixed(2)} s · ${v.videoWidth}×${v.videoHeight}`;
+  const thumbs = [...$('fvStrip').children], on = nearestThumb(thumbs);
+  thumbs.forEach(c => c.classList.toggle('on', +c.dataset.i === on));
+}
+async function openFrames(r){
+  FV.r = r; FV.fps = r.fps || 24; const v = fvV(); v.pause(); $('fvPlay').textContent = '▶ Play';
+  v.src = viewUrl(r); $('fv').classList.remove('hide'); $('fvStrip').innerHTML = ''; $('fvInfo').textContent = 'Loading...';
+  try { await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('the video did not load')); }); }
+  catch(e) { return toast(e.message); }
+  FV.n = Math.max(1, Math.round(v.duration * FV.fps)); $('fvSlider').max = FV.n - 1; fvShow(0);
+  // filmstrip: up to 16 evenly spaced thumbnails from a second (hidden) copy of the video
+  const t = document.createElement('video'); t.src = v.src; t.muted = true; t.preload = 'auto';
+  await new Promise(res => t.onloadedmetadata = res);
+  const k = Math.min(16, FV.n);
+  for (let j = 0; j < k && !$('fv').classList.contains('hide') && FV.r === r; j++) {
+    const fi = Math.round(j * (FV.n - 1) / Math.max(1, k - 1));
+    t.currentTime = Math.min(t.duration - 0.001, (fi + 0.5) / FV.fps); await new Promise(res => t.onseeked = res);
+    const c = document.createElement('canvas'); c.height = 54; c.width = Math.round(54 * t.videoWidth / t.videoHeight); c.dataset.i = fi;
+    c.getContext('2d').drawImage(t, 0, 0, c.width, c.height); c.title = 'Frame ' + (fi + 1); c.onclick = () => fvShow(fi);
+    $('fvStrip').appendChild(c);
+  }
+  t.removeAttribute('src'); t.load();
+  if (FV.r === r) { const thumbs = [...$('fvStrip').children], on = nearestThumb(thumbs); thumbs.forEach(c => c.classList.toggle('on', +c.dataset.i === on)); }
+}
+function fvFrameBlob(){
+  const v = fvV(), c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0); return new Promise(res => c.toBlob(res, 'image/png'));
+}
+const fvName = () => `frame_${(FV.r?.filename || 'video').replace(/\.\w+$/, '')}_f${FV.i + 1}_${Date.now() % 1e6}.png`;
+async function fvUpload(){ return FV.cut ? FV.cut.ref : await upload(await fvFrameBlob(), fvName()); }
+function fvClose(){ fvV().pause(); $('fv').classList.add('hide'); fvV().removeAttribute('src'); fvV().load(); FV.r = null; }
+$('fvClose').onclick = fvClose;
+$('fv').onclick = e => { if (e.target === $('fv')) fvClose(); };
+$('fvPrev').onclick = () => fvShow(FV.i - 1); $('fvNext').onclick = () => fvShow(FV.i + 1);
+$('fvSlider').oninput = () => fvShow(+$('fvSlider').value);
+$('fvPlay').onclick = () => { const v = fvV();
+  if (v.paused) { $('fvCut').classList.add('hide'); fvV().style.visibility = ''; v.play(); $('fvPlay').textContent = '❚❚ Pause';
+    const tick = () => { if (v.paused) return; FV.i = Math.min(FV.n - 1, Math.floor(v.currentTime * FV.fps)); $('fvSlider').value = FV.i;
+      $('fvInfo').textContent = `Frame ${FV.i + 1} / ${FV.n} · ${v.currentTime.toFixed(2)} s`; requestAnimationFrame(tick); }; tick(); }
+  else { v.pause(); $('fvPlay').textContent = '▶ Play'; fvShow(Math.floor(v.currentTime * FV.fps)); } };
+$('fvVid').onended = () => { $('fvPlay').textContent = '▶ Play'; };
+document.addEventListener('keydown', e => {
+  if ($('fv').classList.contains('hide')) return;
+  if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && document.activeElement !== $('fvSlider')) return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); fvShow(FV.i - (e.shiftKey ? 10 : 1)); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); fvShow(FV.i + (e.shiftKey ? 10 : 1)); }
+  else if (e.key === ' ') { e.preventDefault(); $('fvPlay').click(); }
+  else if (e.key === 'Escape') fvClose();
+});
+$('fvEdit').onclick = async () => {
+  try { $('fvEdit').disabled = true; const name = await fvUpload();
+    localStorage.setItem('studio.handoff', JSON.stringify({name, t:Date.now()}));
+    location.href = 'index.html?v=' + Date.now(); }
+  catch(e) { toast('Could not send the frame: ' + e.message); $('fvEdit').disabled = false; }
+};
+$('fvStart').onclick = async () => {
+  try { const cut = FV.cut, i = FV.i, b = cut ? null : await fvFrameBlob(), name = cut ? null : fvName();
+    st.start = {url:cut ? cut.url : URL.createObjectURL(b), name:null, video:false}; st.vid = null; render(); fvClose();
+    st.start.name = cut ? cut.ref : await upload(b, name); render(); toast(`Frame ${i + 1} is now the start image.`, true); }
+  catch(e) { toast('Could not use the frame: ' + e.message); }
+};
+$('fvDl').onclick = async () => { const a = document.createElement('a');
+  a.href = FV.cut ? FV.cut.url : URL.createObjectURL(await fvFrameBlob()); a.download = (FV.cut ? 'nobg_' : '') + fvName(); a.click(); };
+$('fvBg').onclick = async () => {
+  const b = $('fvBg'); b.disabled = true; b.textContent = '✂ Cutting...';
+  try { fvV().pause(); const i = FV.i, name = await upload(await fvFrameBlob(), fvName());
+    const out = await waitFor(await queue(bgGraph(name, `video/STUDIO/frames/nobg_${stamp()}`)), 'Removing background');
+    const im = (out['6']?.images || [])[0]; if (!im) throw new Error('no picture came back');
+    if (FV.i !== i || !FV.r) throw new Error('moved to another frame - try again');
+    FV.cut = {url:viewUrl({...im, t:Date.now()}), ref:(im.subfolder ? im.subfolder.replace(/\\/g, '/') + '/' : '') + im.filename + ' [output]'};
+    $('fvCut').src = FV.cut.url; $('fvCut').classList.remove('hide'); fvV().style.visibility = 'hidden';   // else the frame shows through the cut-out
+    toast('Background removed. Edit in Image / Use as start / PNG now use the cut-out.', true); }
+  catch(e) { toast('Remove BG: ' + e.message); }
+  b.disabled = false; b.textContent = '✂ Remove BG';
+};
+// same Remove-background graph as the Image page: BiRefNet mask (subject = 1) -> inverted -> alpha
+function bgGraph(imageName, prefix){
+  return {'1':{class_type:'LoadImage', inputs:{image:imageName}},
+    '2':{class_type:'LoadBackgroundRemovalModel', inputs:{bg_removal_name:'birefnet.safetensors'}},
+    '3':{class_type:'RemoveBackground', inputs:{bg_removal_model:['2', 0], image:['1', 0]}},
+    '4':{class_type:'InvertMask', inputs:{mask:['3', 0]}},
+    '5':{class_type:'JoinImageWithAlpha', inputs:{image:['1', 0], alpha:['4', 0]}},
+    '6':{class_type:'SaveImage', inputs:{images:['5', 0], filename_prefix:prefix}}};
+}
 function addResult(r, isNew){
   const vk = (r.subfolder || '') + '/' + r.filename;
   if (isNew) { results = results.filter(x => x !== r && (x.subfolder || '') + '/' + x.filename !== vk); $('gallery').querySelectorAll('.card[data-k]').forEach(c => { if (c.dataset.k === vk) c.remove(); }); }
@@ -910,10 +1049,11 @@ function addResult(r, isNew){
   c.innerHTML = `<button class="ck" title="Select (Shift = range)">✓</button><video src="${viewUrl(r)}" controls loop playsinline preload="metadata"></video>
     <div class="meta" title="${escHTML(r.enhanced ? 'Enhanced: ' + r.enhanced : r.text || '')}">${r.what || ''} · ${r.dur || '?'} s · ${r.ar || ''}${r.enhanced ? ' · ✨' : ''} · ${escHTML(r.text || '')}</div>
     <div class="acts"><a href="${viewUrl(r)}" download="${r.filename}">⬇ Download</a><button data-a="use">Use as video</button>
-    <button data-a="cont">Continue from last frame</button><button data-a="reuse">Reuse</button><button data-a="del" style="margin-left:auto;color:#c0392b">🗑 Delete</button></div>
+    <button data-a="frames" title="Step through it frame by frame; send a frame to Image edit, Start image or Remove BG">🎞 Frames</button><button data-a="cont">Continue from last frame</button><button data-a="reuse">Reuse</button><button data-a="del" style="margin-left:auto;color:#c0392b">🗑 Delete</button></div>
     ${r.board ? `<div class="shotsrow">Redo shot: ${r.board.shots.map((s, k) => `<button data-redo="${k}" title="${(s.text || '').replace(/"/g,'&quot;')}">${k+1}</button>`).join('')}</div>` : ''}`;
   c.querySelectorAll('[data-redo]').forEach(b => b.onclick = () => redoShot(r, +b.dataset.redo));
   c.querySelector('[data-a=del]').onclick = () => deleteResults([r]);
+  c.querySelector('[data-a=frames]').onclick = () => openFrames(r);
   c.querySelector('.ck').onclick = e => { e.stopPropagation(); toggleSel(r, e.shiftKey); };
   c.querySelector('.meta').onclick = e => { if (e.shiftKey || e.ctrlKey || e.metaKey || sel.size) toggleSel(r, e.shiftKey); };
   if (sel.has(vk)) c.classList.add('sel');

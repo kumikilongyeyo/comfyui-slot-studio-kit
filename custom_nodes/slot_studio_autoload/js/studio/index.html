@@ -78,7 +78,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .grid{display:flex;flex-wrap:wrap;gap:8px}
 .grid::after{content:'';flex-grow:999999}
 .card{position:relative;height:var(--th,220px);flex-grow:var(--ar,1);flex-basis:calc(var(--th,220px) * var(--ar,1));max-width:100%;border-radius:10px;overflow:hidden;background:var(--media)}
-.card img{display:block;width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.card img{display:block;width:100%;height:100%;object-fit:cover;cursor:zoom-in;background:#fff conic-gradient(#e9ebef 25%,#fff 0 50%,#e9ebef 0 75%,#fff 0) 0 0/16px 16px}
 .card .ck{position:absolute;top:8px;left:8px;width:22px;height:22px;border-radius:6px;border:2px solid #fff;background:#0004;opacity:0;transition:opacity .12s;z-index:2;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;padding:0}
 .card:hover .ck,.gallery.selecting .ck{opacity:1}
 .card.sel .ck{background:var(--accent);border-color:var(--accent);opacity:1}
@@ -106,7 +106,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .empty b{display:block;color:var(--text);font-size:18px;margin-bottom:6px}
 .lightbox{position:fixed;inset:0;background:#0f1115e6;display:none;align-items:center;justify-content:center;z-index:50;padding:30px}
 .lightbox.on{display:flex}
-.lightbox img{max-width:100%;max-height:100%;border-radius:10px}
+.lightbox img{max-width:100%;max-height:100%;border-radius:10px;background:#fff conic-gradient(#e9ebef 25%,#fff 0 50%,#e9ebef 0 75%,#fff 0) 0 0/16px 16px}
 .toast{position:fixed;bottom:84px;left:50%;transform:translateX(-50%);background:#fff1f1;border:1px solid #f3b4b4;color:#9b1c1c;box-shadow:0 6px 20px #0002;padding:10px 14px;border-radius:10px;display:none;z-index:60;max-width:70vw}
 .toast.ok{background:#ecfdf3;border-color:#a7e3bd;color:#166534}
 /* @ tags: a mirror behind the (transparent) textarea paints the highlights; the menu sits under the caret */
@@ -132,6 +132,25 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .menu button:hover,.menu button.on{background:var(--hover)}
 .menu button b{display:block;font-size:13px} .menu button span{color:var(--dim);font-size:12px}
 .menu .grp{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px 4px}
+/* model picker */
+.mic{flex:none;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font:700 11px/1 system-ui;color:#fff;letter-spacing:-.02em}
+.f-qwen21{background:linear-gradient(135deg,#7c3aed,#4f46e5)} .f-zimage{background:linear-gradient(135deg,#0ea5e9,#0284c7)}
+.f-klein{background:linear-gradient(135deg,#f59e0b,#ea580c)} .f-qwen{background:linear-gradient(135deg,#a855f7,#db2777)}
+.f-sdxl{background:linear-gradient(135deg,#64748b,#334155)}
+.mtx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.mtx b,.mtx span,.mtx small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd.mdd{gap:10px;padding:8px 10px}
+.dd.mdd .mtx b{flex:none;font-size:14px} .dd.mdd .mtx small{font-size:11.5px}
+.dd .nc,.menu .grp em{color:#b45309;font-style:normal;text-transform:none;letter-spacing:0}
+.menu .grp em::before{content:'· '}
+.menu .mrow{display:flex;align-items:center;gap:10px;padding:7px 8px}
+.menu .mrow .mtx b{font-size:13px;color:var(--text)} .menu .mrow .mtx span{font-size:11.5px}
+.menu .mrow .mic{color:#fff}
+.menu .mrow.meh{opacity:.55} .menu .mrow.meh:hover{opacity:.85}
+.menu .mrow .chk{flex:none;width:14px;color:var(--accent,#2563eb);font-weight:700;text-align:center}
+.bdg{flex:none;font:600 10px/1 system-ui;font-style:normal;padding:4px 6px;border-radius:999px;white-space:nowrap}
+.bdg.best{background:#dcfce7;color:#15803d} .bdg.warn{background:#fef3c7;color:#b45309}
+#modelBadges{display:flex;gap:4px;flex:none} #modelBadges:empty{display:none}
 .tiles{display:flex;gap:8px;flex-wrap:wrap}
 .tiles .slot{width:96px;height:96px;aspect-ratio:auto;font-size:11px;border-radius:10px}
 .tiles .slot .cap{font-size:10px}
@@ -178,20 +197,20 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
 
     <div class="sec">
       <div class="lbl">Model <small id="modelHint"></small></div>
-      <div class="pop"><button class="dd" id="modelBtn"><b id="modelName"></b><small id="modelDesc"></small><span class="car">▾</span></button>
+      <div class="pop"><button class="dd mdd" id="modelBtn"><span id="modelIcon" class="mic"></span><span class="mtx"><b id="modelName"></b><small id="modelDesc"></small></span><span id="modelBadges"></span><span class="car">▾</span></button>
         <div class="menu hide" id="models"></div></div>
     </div>
 
     <div class="sec" id="secPics">
-      <div class="lbl">References <small>click, drag or paste (Ctrl+V)</small></div>
+      <div class="lbl"><span id="refsLbl">References</span> <small>click, drag or paste (Ctrl+V)</small></div>
       <div class="tiles">
-        <div class="slot" id="slot1"><div>＋<br>Picture 1<br><small>to edit</small></div></div>
+        <div class="slot" id="slot1"><div>＋<br>Picture 1<br><small id="slot1Sub">to edit</small></div></div>
         <div class="slot" id="slot2"><div>＋<br>Picture 2<br><small>style / object</small></div></div>
         <div id="moreSlots" style="display:contents"></div>
         <div class="slot addref" id="addRef" title="Add more reference pictures (up to 10) - click, drop or paste"><div><b style="font-size:20px">＋</b><br><span id="addRefN"></span></div></div>
       </div>
       <div class="hint hide" id="refLimit"></div>
-      <div class="row" style="margin-top:8px;flex-wrap:wrap">
+      <div class="row" id="paintRow" style="margin-top:8px;flex-wrap:wrap">
         <button class="ghost" id="paintBtn" disabled>Paint area to change</button>
         <button class="ghost hide" id="clearMask">Clear paint</button>
         <span class="hide" id="brushBox" style="flex:1;display:flex;gap:6px;align-items:center;font-size:12px;color:var(--dim)">brush <input type="range" id="brush" min="8" max="160" value="50"></span>
@@ -203,7 +222,7 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0}
       <div class="lbl"><span id="promptLbl">Prompt</span></div>
       <div class="pbox">
         <textarea id="prompt" placeholder="Describe what you want..."></textarea>
-        <div class="pbar"><button class="ghost" id="tagBtn" title="Tag a reference picture (or just type @)">@ Tag</button><button class="ghost" id="enhance" title="Let Qwen 3.5 write a fuller prompt now (you can edit it)">✨ AI prompt</button><label class="enh" title="On: every Generate rewrites the prompt first (clearer, translated to English, tags kept). Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> Enhance prompt</label><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
+        <div class="pbar"><button class="ghost" id="tagBtn" title="Tag a reference picture (or just type @)">@ Tag</button><button class="ghost" id="enhance" title="Turn a rough idea into a full prompt written for the model you picked (you can edit it)">✨ AI prompt</button><label class="enh" title="On: every Generate rewrites the prompt first, in the style the picked model reads best (translated to English, tags kept). Off: sent exactly as typed."><input type="checkbox" class="enhBox" id="autoEnh"> Enhance prompt</label><span style="flex:1"></span><button class="ghost" id="clearPrompt" title="Clear text">✕</button></div>
       </div>
       <div class="brow" style="margin-top:10px">
         <div class="stepper" title="Number of images (1-12)"><button id="cMinus">−</button><span id="count">1</span><button id="cPlus">+</button></div>
@@ -391,24 +410,46 @@ function resolveTags(text, words, known, why){
 }
 
 // ------------------------------------------------------------------ render controls
+// Model picker: short one-line taglines + small badges instead of long sentences; grouped, with a family icon.
+const MODEL_UI = {
+  qwen21:      {ic:'Q',  tag:'Smartest · long prompts, text, edits'},
+  qwen21full:  {ic:'Q',  tag:'Best quality · about 3x slower'},
+  zimage:      {ic:'Z',  tag:'Best looks from text'},
+  klein:       {ic:'K',  tag:'Fast edits · style from picture 2'},
+  qwen:        {ic:'QE', tag:'Precise edits + camera angles'},
+  sdxl:        {ic:'XL', tag:'For old style LoRAs'},
+  dreamshaper: {ic:'XL', tag:'Stylized fantasy · fast'},
+  juggernaut:  {ic:'XL', tag:'Cinematic realism'},
+  realvis:     {ic:'XL', tag:'Photo-real props, jewelry'},
+};
+const MODEL_GROUPS = [['qwen21', 'Smartest', 'non-commercial'], ['zimage|klein|qwen', 'Commercial-safe', ''], ['sdxl', 'SDXL looks', 'style LoRAs']];
+function modelBadges(m){
+  const out = [];
+  if ((st.tab === 'edit' && m.best === 'edit') || (st.tab === 'create' && m.best === 'create')) out.push('<i class="bdg best">Best</i>');
+  if (st.tab === 'edit' && m.edit === 'restyle') out.push('<i class="bdg warn" title="Can\'t follow edit instructions - repaints the whole picture">Restyle only</i>');
+  return out.join('');
+}
+const modelIcon = m => `<span class="mic f-${m.family}">${(MODEL_UI[m.id] || {}).ic || m.name[0]}</span>`;
 function renderModels(){
   const box = $('models'); box.innerHTML = '';
-  let lastFam = null;
-  for (const m of MODELS){
-    if ((m.ckpt && !st.available.has(m.ckpt)) || (m.need && !st.available.has(m.need))) continue;
-    if (m.family !== 'qwen21' && lastFam === 'qwen21') box.insertAdjacentHTML('beforeend', '<div class="grp">Commercial-safe models</div>');
-    if (m.family === 'sdxl' && lastFam !== 'sdxl') box.insertAdjacentHTML('beforeend', '<div class="grp">SDXL looks (work with style LoRAs)</div>');
-    lastFam = m.family;
-    const b = document.createElement('button');
-    const meh = st.tab === 'edit' && m.edit === 'restyle';
-    b.className = m.id === st.model ? 'on' : '';
-    const best = (st.tab==='edit' && m.best==='edit') || (st.tab==='create' && m.best==='create') ? ' · best' : '';
-    b.innerHTML = `<b>${m.name}${best}</b><span>${meh ? 'restyle only - can\'t follow edit instructions' : m.desc}</span>`;
-    b.onclick = () => { st.model = m.id; if (styleOf(st.style)?.family !== m.family) st.style = 'None'; closeMenus(); renderAll(); };
-    box.appendChild(b);
+  const avail = MODELS.filter(m => !((m.ckpt && !st.available.has(m.ckpt)) || (m.need && !st.available.has(m.need))));
+  for (const [fams, title, note] of MODEL_GROUPS){
+    const list = avail.filter(m => new RegExp(`^(${fams})$`).test(m.family)); if (!list.length) continue;
+    box.insertAdjacentHTML('beforeend', `<div class="grp">${title}${note ? ` <em>${note}</em>` : ''}</div>`);
+    for (const m of list){
+      const b = document.createElement('button'), meh = st.tab === 'edit' && m.edit === 'restyle';
+      b.className = 'mrow' + (m.id === st.model ? ' on' : '') + (meh ? ' meh' : '');
+      b.title = m.desc;
+      b.innerHTML = `${modelIcon(m)}<span class="mtx"><b>${m.name}</b><span>${(MODEL_UI[m.id] || {}).tag || m.desc}</span></span>${modelBadges(m)}<span class="chk">${m.id === st.model ? '✓' : ''}</span>`;
+      b.onclick = () => { st.model = m.id; if (styleOf(st.style)?.family !== m.family) st.style = 'None'; closeMenus(); renderAll(); };
+      box.appendChild(b);
+    }
   }
-  $('modelName').textContent = model().name;
-  $('modelDesc').textContent = st.tab === 'edit' && model().edit === 'restyle' ? 'restyle only' : model().desc;
+  const m = model();
+  $('modelIcon').outerHTML = modelIcon(m).replace('<span class="mic', '<span id="modelIcon" class="mic');
+  $('modelName').textContent = m.name;
+  $('modelDesc').innerHTML = `${(MODEL_UI[m.id] || {}).tag || m.desc}${m.family === 'qwen21' ? ' · <span class="nc">non-commercial</span>' : ''}`;
+  $('modelBadges').innerHTML = modelBadges(m);
   $('modelHint').textContent = st.tab === 'edit' ? 'Qwen 2.1, Klein or Qwen Edit for edits' : '';
 }
 function closeMenus(){ document.querySelectorAll('.menu').forEach(m => m.classList.add('hide')); }
@@ -561,15 +602,23 @@ function camWords(){
 }
 function renderAll(){
   $('tabCreate').classList.toggle('on', st.tab==='create'); $('tabEdit').classList.toggle('on', st.tab==='edit');
-  $('secPics').classList.toggle('hide', st.tab !== 'edit');
+  // References show in BOTH tabs: in Create they guide a new picture (blank canvas of your size, see buildPrompt)
+  { const c = st.tab === 'create', m = model();
+    $('refsLbl').textContent = c ? 'References (optional)' : 'References';
+    if ($('slot1Sub')) $('slot1Sub').textContent = c ? 'reference' : 'to edit';
+    $('paintRow').classList.toggle('hide', c);
+    $('picHint').textContent = c
+      ? (refLimit(m) > 1 ? 'Add pictures to guide the new picture (character, object, style). Tag them with @ in the prompt. Your shape + size below stay as picked.'
+                         : `${m.name} can't use references in Create - pick Qwen-Image 2.1, FLUX.2 Klein or Qwen Edit to use them.`)
+      : 'Paint = only that part changes, the rest stays pixel-exact. Picture 2 is used as soon as you add it: say how, e.g. "in the style of picture 2".'; }
   $('promptLbl').textContent = st.tab === 'edit' ? 'What to change' : 'Prompt';
   $('prompt').placeholder = st.tab === 'edit' ? 'e.g. Put the crown from @Picture2 on the man in @Picture1, keep everything else the same. (type @ to tag a picture)' : 'Describe what you want: subject, materials, colours, lighting, background...';
-  $('tagBtn').classList.toggle('hide', st.tab !== 'edit'); repaintTags();
+  $('tagBtn').classList.toggle('hide', st.tab !== 'edit' && !(st.pic1 && refLimit(model()) > 1)); repaintTags();
   $('restyleWarn').classList.toggle('hide', !(st.tab === 'edit' && model().edit === 'restyle'));
   $('paintBtn').disabled = !st.pic1;
   { const lim = refLimit(model()), n = refCount();
     $('refLimit').textContent = n > lim ? (lim === 1 ? `${model().name} only uses Picture 1 (restyle).` : `${model().name} uses pictures 1-${lim}; the rest are skipped. Qwen-Image 2.1 and Klein take all ${MAX_REFS}.`) : '';
-    $('refLimit').classList.toggle('hide', !(st.tab === 'edit' && n > lim)); }
+    $('refLimit').classList.toggle('hide', !(n > lim && (st.tab === 'edit' || lim > 1))); }
   $('count').textContent = st.count;
   renderModels(); renderStyles(); renderAspects(); renderSizes(); renderCam(); savePrefs();
 }
@@ -608,7 +657,6 @@ document.addEventListener('paste', e => {
   if (/INPUT|TEXTAREA/.test(document.activeElement?.tagName || '') && !e.clipboardData?.files?.length) return;
   const fs = [...(e.clipboardData?.items||[])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean); if (!fs.length) return;
   e.preventDefault();
-  if (st.tab !== 'edit') { st.tab = 'edit'; renderAll(); }
   if (pasteTarget != null && fs.length === 1) return loadFile(pasteTarget, fs[0]);   // over a slot = replace that one
   addFiles(fs);
 });
@@ -660,7 +708,7 @@ function removeRef(key){
 function drawSlot(key){
   if (typeof key === 'number') return drawMore();
   const el = $(key === 'pic1' ? 'slot1' : 'slot2'), p = st[key];
-  if (!p) { el.innerHTML = key==='pic1' ? '<div>＋<br>Picture 1<br><small>to edit</small></div>' : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; }
+  if (!p) { el.innerHTML = key==='pic1' ? `<div>＋<br>Picture 1<br><small id="slot1Sub">${st.tab === 'create' ? 'reference' : 'to edit'}</small></div>` : '<div>＋<br>Picture 2<br><small>style / object</small></div>'; }
   else {
     el.innerHTML = `<img src="${p.url}" alt=""><button class="x" title="Remove">×</button><span class="cap">${key==='pic1'?'1':'2'}</span>${dimBadge(p, key==='pic1'?1:2)}`;
     if (key === 'pic1') el.appendChild(maskCanvas);
@@ -764,12 +812,11 @@ $('enhance').onclick = async () => {
   if (!st.available.has('__qwen35')) return toast('The prompt helper model (Qwen 3.5 4B) is not installed yet.');
   const txt = $('prompt').value.trim();
   const edit = st.tab === 'edit';
-  const ask = edit
-    ? `Rewrite this picture-edit instruction so an image editing AI follows it exactly. Keep it to 1-3 sentences, say what to change and that everything else stays the same. Copy the tags @Picture1 and @Picture2 exactly as written wherever they appear. Instruction: ${txt || 'improve it'}`
-    : `Expand this into one rich image-generation prompt for a polished casual mobile slot game asset: subject, shape, materials, colours, lighting, camera, background. 2-4 sentences, no lists, no quotes. Idea: ${txt || 'a slot game symbol'}`;
+  // @Picture tags stay as typed here (the box keeps the user's own tag words); Generate resolves them later
+  const ask = enhAsk(model(), edit, txt || (edit ? 'improve it' : 'a slot game symbol'), true);
   const p = {
     '1': {class_type:'CLIPLoader', inputs:{clip_name:'qwen3.5_4b_bf16.safetensors', type:'stable_diffusion', device:'default'}},
-    '2': {class_type:'TextGenerate', inputs:{clip:['1',0], prompt:ask, max_length:220, sampling_mode:'on',
+    '2': {class_type:'TextGenerate', inputs:{clip:['1',0], prompt:ask, max_length:enhMax(model()), sampling_mode:'on',
           'sampling_mode.temperature':0.7, 'sampling_mode.top_k':64, 'sampling_mode.top_p':0.95, 'sampling_mode.min_p':0.05,
           'sampling_mode.repetition_penalty':1.05, 'sampling_mode.seed':Math.floor(Math.random()*1e9), 'sampling_mode.presence_penalty':0, thinking:false}},
     '3': {class_type:'PreviewAny', inputs:{source:['2',0]}},
@@ -818,11 +865,62 @@ function addEnhance(p, textNode, ask, imageRef, prefix, maxLen){
 }
 const enhText = out => { const t = out?.[ENH_NODE]?.text; return Array.isArray(t) ? t[0] : t || null; };
 const setIn = (p, id, k, v) => { if (p[id]) p[id].inputs[k] = v; };
+// Model-aware Enhance: each model family reads prompts differently, so the rewrite follows the guide of the model
+// picked in the dropdown (and create vs edit). A vague idea becomes the prompt shape that model follows best.
+const ENH_SLOT = 'If the idea names no art style and sounds like a game asset (symbol, icon, button, logo, character, prop), '
+  + 'make it a polished mobile slot game asset: clear readable silhouette, rich materials, soft studio light, simple background. '
+  + 'Add the missing visual detail (materials, colours, lighting, camera, background) but never new subjects. ';
+const ENH_GUIDE = {
+  qwen21: {
+    create: 'Target model: Qwen-Image 2.1, which follows long, exact natural-language prompts. Write ONE flowing paragraph of 50-120 words: '
+      + 'main subject and its shape or pose first, then materials and colours, then composition and camera (shot size, angle), lighting, background, art style last. '
+      + 'When the idea has several things, give their exact counts and positions. Any words that must appear in the picture go in double quotes, spelled exactly, with where they sit and how the lettering looks. ',
+    edit: 'Target model: Qwen-Image 2.1 editing. Write 1-3 short imperative sentences: what to change, in which picture, how it must look; '
+      + 'then say "Keep everything else exactly the same" and name what must stay (pose, framing, colours, lighting). Text to add goes in double quotes. '},
+  qwen: {
+    edit: 'Target model: Qwen Image Edit 2511. Use short, direct commands, one change per sentence (max 3), e.g. "Replace the hat with a golden crown." '
+      + 'Name the picture for each object ("from Picture 2"). End with what stays unchanged (face, pose, background). Text to add goes in double quotes. '},
+  klein: {
+    create: 'Target model: FLUX.2 Klein, which reads natural prose and weights the start most. 30-70 words in one paragraph: subject and action first, '
+      + 'then style or medium, then lighting, colours and background. Describe only what should be visible: no "no X" or "without X" wording (it has no negative prompt). Quote any text that must appear. ',
+    edit: 'Target model: FLUX.2 Klein editing. One to three sentences: "Change / Replace / Add ..." the thing in image 1, mention image 2 when it is the source of an object or style, '
+      + 'then say what stays the same. Positive wording only. '},
+  zimage: {
+    create: 'Target model: Z-Image Turbo, which likes concrete descriptive natural language. 40-90 words in one paragraph: subject, materials and surface detail, colours, '
+      + 'lighting setup, camera and lens, background, style. Never write made-up tokens, hashtags, underscores or code-like words (it paints them as text). No negative wording. Quote text only when it really must appear. '},
+  sdxl: {
+    create: 'Target model: SDXL (old CLIP encoder, it reads only about 60 words and cannot spell). Write comma-separated descriptive phrases, most important first: '
+      + 'subject, key details, materials, colours, style or medium, lighting, composition, then 2-3 quality words (highly detailed, sharp focus). '
+      + 'No full sentences and no quoted text. You may stress at most 2 key phrases as (phrase:1.2). '},
+};
+const ENH_CKPT = {
+  dreamshaper: 'This checkpoint is stylized fantasy art: painterly, vivid, illustrative wording works best. ',
+  juggernaut: 'This checkpoint is cinematic and realistic: use photographic wording (lens, aperture, real materials, film lighting). ',
+  realvis: 'This checkpoint is photo-real: describe real materials, studio product photography, lens and lighting. ',
+};
+const ENH_RESTYLE = 'This model cannot follow edit instructions; it repaints the whole picture from text. So look at the attached picture and describe it '
+  + 'as it should look AFTER the change: the same subject, pose and layout you see, with the change applied (look, colours, lighting, background). '
+  + 'Describe only what is really in the picture plus the change - never invent a new scene. Write a description, not an instruction. ';
+function enhAsk(m, edit, text, manual){
+  const g = ENH_GUIDE[m.family] || ENH_GUIDE.qwen21;
+  let guide;
+  if (edit) guide = m.edit === 'restyle' ? ENH_RESTYLE + (g.create || '') : (g.edit || ENH_GUIDE.qwen21.edit);
+  else guide = (g.create || ENH_GUIDE.qwen21.create) + ENH_SLOT;
+  const ck = ENH_CKPT[m.id] || '';
+  const tags = manual && /@picture\d/i.test(text) ? 'Keep tags like @Picture1, @Picture2 exactly as written. ' : '';
+  // slot-native: a WILD / SCATTER / BONUS symbol carries its word; only models that can spell get it as lettering
+  const sw = !edit && m.family !== 'sdxl' && (text.match(/\b(wild|scatter|bonus|jackpot)\b/i) || [])[1];
+  const word = sw ? `It is a ${sw.toUpperCase()} slot symbol: include the phrase: with the word "${sw.toUpperCase()}" in thick glossy game lettering across the front. ` : '';
+  const must = edit && m.edit === 'restyle' ? `\nThe change that MUST be visible in your description: ${text}` : '';
+  return `Rewrite the text below into the best possible prompt for this image AI. ${guide}${ck}${word}${tags}${ENH_RULES} `
+    + `The rules above are for you only: never mention them, the model name or the word "prompt" in your answer.${must}\n\nText: ${text}`;
+}
+const enhMax = m => ({sdxl:140, klein:200, zimage:220, qwen:180}[m.family] || 300);
 // Pictures 3..10 are added to the API graph here (workflow 16 itself only has 2 picture boxes). Each one gets the same
 // clean-up as Picture 2 (alpha over white, scaled), then: Qwen-Image 2.1 -> images.image_N on the 2-picture encoder (130),
 // Qwen Edit -> image3 on 92/94, Klein -> one more ReferenceLatent pair chained after 64/65 (switches 66/67 then use the end).
-function addExtraRefs(p, m){
-  const extra = st.more.slice(0, Math.max(0, refLimit(m) - 2)); if (!extra.length) return;
+function addExtraRefs(p, m, list = st.more){
+  const extra = list.slice(0, Math.max(0, refLimit(m) - 2)); if (!extra.length) return;
   if (extra.some(x => !x.name)) throw new Error('A reference picture is still uploading, try again in a second.');
   let id = 900, posK = '64', negK = '65';
   const add = (class_type, inputs) => { const k = String(id++); p[k] = {class_type, inputs}; return k; };
@@ -844,9 +942,23 @@ async function buildPrompt(){
   if (edit && !st.pic1) throw new Error('Add Picture 1 first (drag, paste or click the box).');
   if (edit && st.pic1 && !st.pic1.name) throw new Error('Picture 1 is still uploading, try again in a second.');
   setIn(p, N.model, 'choice', MODEL_OPTS[m.idx]); setIn(p, N.model, 'index', m.idx);
-  setIn(p, N.task, 'choice', TASK_OPTS[edit ? 1 : 0]); setIn(p, N.task, 'index', edit ? 1 : 0);
-  let text = $('prompt').value.trim();
-  if (/@picture\d+\b/i.test(text)) {
+  // CREATE + references: the job runs as an edit on a blank white canvas of the Create size (Picture 1), with your
+  // references as Pictures 2..N - so the shape is yours and the references only guide the content. @Picture1 in the
+  // Create tab = your first reference (shifted to the model's picture 2 here).
+  const refsC = !edit && refLimit(m) > 1 && st.pic1 ? [st.pic1, st.pic2, ...st.more].filter(Boolean).slice(0, refLimit(m) - 1) : null;
+  if (refsC?.some(x => !x.name)) throw new Error('A reference picture is still uploading, try again in a second.');
+  const asEdit = edit || !!refsC;
+  setIn(p, N.task, 'choice', TASK_OPTS[asEdit ? 1 : 0]); setIn(p, N.task, 'index', asEdit ? 1 : 0);
+  let text = $('prompt').value.trim(), canvasLine = '';
+  if (refsC) {
+    const fmt = {qwen:n => 'Picture ' + n, qwen21:n => `<image${n}>`, klein:n => 'image ' + n}[m.family];
+    const words = {}; refsC.forEach((_, i) => words['picture' + (i + 1)] = fmt(i + 2));
+    text = resolveTags(text, words, Array.from({length:MAX_REFS}, (_, i) => 'picture' + (i + 1)),
+      t => `You tagged @${t}, but there is no reference ${t.replace(/\D/g, '')} (${m.name} uses up to ${refLimit(m) - 1} in Create).`);
+    const refWords = refsC.map((_, i) => fmt(i + 2)).join(', ');
+    canvasLine = `${fmt(1)} is an empty white canvas: paint a completely new full picture over all of it. Use ${refWords} as reference${refsC.length > 1 ? 's' : ''} for the look of the subject.`;
+  }
+  if (!refsC && /@picture\d+\b/i.test(text)) {
     const words = imageTagWords(m, edit), lim = refLimit(m);
     text = resolveTags(text, words || {}, Array.from({length:MAX_REFS}, (_, i) => 'picture' + (i + 1)), t => {
       const n = +t.replace(/\D/g, '');
@@ -862,11 +974,10 @@ async function buildPrompt(){
     : sty.trigger.split(',').map(t => t.trim()).filter(t => t && (/\s/.test(t) || !/[\d_<>]/.test(t))).join(', ');
   const core = text, trigAdded = trig && !text.toLowerCase().includes(trig.toLowerCase().split(',')[0].trim());
   if (trigAdded) text = trig.replace(/,?\s*$/, ',') + ' ' + text;
+  if (canvasLine) text = canvasLine + ' ' + text;
   setIn(p, N.prompt, 'value', text);
-  if ($('autoEnh').checked && core) addEnhance(p, N.prompt, (edit
-      ? 'Rewrite this picture-edit instruction so an image editing AI follows it exactly: say clearly what to change and that everything else stays the same. 1-3 sentences. '
-      : 'Rewrite this idea as one clear, detailed image-generation prompt: subject, look, materials, colours, lighting, camera, background. 2-4 sentences. ')
-    + ENH_RULES + '\n\nText: ' + core, edit ? ['4', 0] : null, trigAdded ? trig.replace(/,?\s*$/, ',') : '', 260);
+  if ($('autoEnh').checked && core) addEnhance(p, N.prompt, enhAsk(m, edit, core, false),
+    asEdit ? ['4', 0] : null, [canvasLine, trigAdded ? trig.replace(/,?\s*$/, ',') : ''].filter(Boolean).join(' '), enhMax(m));
   setIn(p, N.neg, 'value', $('neg').value);
   // pictures
   if (edit) {
@@ -876,6 +987,11 @@ async function buildPrompt(){
     setIn(p, N.p1, 'image', p1); setIn(p, N.precise, 'value', precise); setIn(p, N.edge, 'value', +$('edge').value);
     setIn(p, N.use2, 'value', !!(st.pic2 && st.pic2.name)); if (st.pic2?.name) setIn(p, N.p2, 'image', st.pic2.name);
     if (st.pic2?.name) addExtraRefs(p, m);
+  } else if (refsC) {
+    // Picture 1 = ref 1 only so the Enhance helper can look at it; node 27 (Picture 1 for every edit model) becomes the blank canvas below
+    setIn(p, N.p1, 'image', refsC[0].name); setIn(p, N.precise, 'value', false);
+    setIn(p, N.use2, 'value', true); setIn(p, N.p2, 'image', refsC[0].name);
+    addExtraRefs(p, m, refsC.slice(1));
   } else { setIn(p, N.precise, 'value', false); setIn(p, N.use2, 'value', false); }
   // camera (Qwen edit only)
   const cam = m.family === 'qwen' && edit && $('camOn').checked;
@@ -885,7 +1001,10 @@ async function buildPrompt(){
   // size, count, strength
   const ar = ASPECTS.find(a => a[0] === st.aspect) || ASPECTS[0], dim = targetDims();
   setIn(p, N.res, 'aspect_ratio', ar[1]); setIn(p, N.res, 'megapixels', st.size); setIn(p, N.editMp, 'value', st.size);
-  if (!edit) {
+  if (refsC) {
+    p['27'] = {class_type:'EmptyImage', inputs:{width:dim.w, height:dim.h, batch_size:1, color:16777215}};
+    setIn(p, N.editMp, 'value', Math.min(4, Math.max(0.25, +(dim.w * dim.h / 1048576).toFixed(2))));
+  } else if (!edit) {
     // every text-to-image latent reads width/height from node 13: give them the exact pixels shown on the chip
     for (const n of Object.values(p)) for (const [k, v] of Object.entries(n.inputs))
       if (Array.isArray(v) && String(v[0]) === N.res && (v[1] === 0 || v[1] === 1)) n.inputs[k] = v[1] === 0 ? dim.w : dim.h;
@@ -1053,17 +1172,44 @@ function cardFor(r){
   const ref = (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]';
   c.innerHTML = `<button class="ck" title="Select (Shift = range)">✓</button><img loading="lazy" src="${viewUrl(r)}" alt="" draggable="false">
     <div class="acts"><button data-a="edit" title="Edit this picture">Edit</button><button data-a="ref" title="Use as Picture 2">Ref</button>
-    <button data-a="reuse" title="Reuse prompt and settings">Reuse</button><a href="${viewUrl(r)}" download="${r.filename}" title="Download">⬇</a></div>
+    <button data-a="reuse" title="Reuse prompt and settings">Reuse</button><button data-a="bg" title="Remove the background (transparent PNG, BiRefNet)">✂ BG</button><a href="${viewUrl(r)}" download="${r.filename}" title="Download">⬇</a></div>
     <div class="meta" title="${r.enhanced ? 'Enhanced: ' + escHTML(r.enhanced) : ''}">${r.model || ''}${r.style && r.style !== 'None' ? ' · ' + r.style : ''}${r.enhanced ? ' · ✨' : ''} · ${(r.text || '').replace(/</g, '&lt;')}</div>`;
   const img = c.querySelector('img');
   img.onload = () => { if (!r.w) { r.w = img.naturalWidth; r.h = img.naturalHeight; c.style.setProperty('--ar', (r.w / r.h).toFixed(3)); saveResults(); } };
   c.querySelector('.ck').onclick = e => { e.stopPropagation(); toggleSel(r, e.shiftKey); };
   img.onclick = e => { if (e.shiftKey || e.ctrlKey || e.metaKey || sel.size) return toggleSel(r, e.shiftKey); $('lbImg').src = viewUrl(r); $('lightbox').classList.add('on'); };
   c.querySelector('[data-a=edit]').onclick = () => editResult(r);
-  c.querySelector('[data-a=ref]').onclick = () => { st.tab = 'edit'; const k = !st.pic2 ? 'pic2' : st.more.length < MAX_REFS - 2 ? st.more.length : 'pic2'; loadUrl(k, viewUrl(r), ref); renderAll(); };
+  c.querySelector('[data-a=bg]').onclick = () => removeBg(r);
+  c.querySelector('[data-a=ref]').onclick = () => { const k = !st.pic2 ? 'pic2' : st.more.length < MAX_REFS - 2 ? st.more.length : 'pic2'; loadUrl(k, viewUrl(r), ref); renderAll(); };
   c.querySelector('[data-a=reuse]').onclick = () => { $('prompt').value = r.text || ''; const m = MODELS.find(x => x.name === r.model); if (m) st.model = m.id; st.style = r.styleFile || 'None'; $('seed').value = r.seed || 7; renderAll(); };
   return c;
 }
+// Remove background (same graph in both pages): BiRefNet mask -> inverted -> alpha; the cutout lands as a new result
+function bgGraph(imageName, prefix){
+  return {'1':{class_type:'LoadImage', inputs:{image:imageName}},
+    '2':{class_type:'LoadBackgroundRemovalModel', inputs:{bg_removal_name:'birefnet.safetensors'}},
+    '3':{class_type:'RemoveBackground', inputs:{bg_removal_model:['2', 0], image:['1', 0]}},
+    '4':{class_type:'InvertMask', inputs:{mask:['3', 0]}},   // RemoveBackground gives subject = 1; JoinImageWithAlpha wants the opposite
+    '5':{class_type:'JoinImageWithAlpha', inputs:{image:['1', 0], alpha:['4', 0]}},
+    '6':{class_type:'SaveImage', inputs:{images:['5', 0], filename_prefix:prefix}}};
+}
+async function removeBg(r){
+  const name = (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]', pend = addPending('Removing background...');
+  try { const out = await waitFor(await queue(bgGraph(name, `STUDIO/nobg_${stamp()}`)), 'Removing background');
+    for (const im of out['6']?.images || []) addResult({...im, model:'Remove BG', text:r.text || '', w:r.w, h:r.h, t:Date.now()});
+    toast('Background removed - new transparent PNG at the top.', true); }
+  catch(e) { toast('Remove BG failed: ' + e.message); }
+  pend.remove();
+}
+// A frame sent from the Video page ("Edit in Image"): becomes Picture 1 in the Edit tab
+async function takeHandoff(){
+  let h = null; try { h = JSON.parse(localStorage.getItem('studio.handoff') || 'null'); localStorage.removeItem('studio.handoff'); } catch(e) {}
+  if (!h?.name || Date.now() - (h.t || 0) > 10 * 60 * 1000) return;
+  st.tab = 'edit'; if (model().edit === 'restyle') st.model = EDIT_DEFAULT(); renderAll();
+  try { await loadUrl('pic1', refUrl(h.name), h.name); renderAll(); toast('Video frame added as Picture 1 - say what to change.', true); }
+  catch(e) { toast('Could not load the video frame: ' + e.message); }
+}
+window.addEventListener('storage', e => { if (e.key === 'studio.handoff' && e.newValue) takeHandoff(); });
 const EDIT_DEFAULT = () => st.available.has(MODELS[0].need) ? 'qwen21' : 'klein';
 function editResult(r){ st.tab = 'edit'; if (model().edit === 'restyle') st.model = EDIT_DEFAULT(); loadUrl('pic1', viewUrl(r), (r.subfolder ? r.subfolder + '/' : '') + r.filename + ' [output]'); renderAll(); }
 function addResult(r){
@@ -1175,7 +1321,7 @@ $('prompt').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlK
     if (!SIZES.some(s => s[1] === st.size)) st.size = 1.0;
   } catch(e) { toast('Could not reach ComfyUI: ' + e.message); }
   wireEnhance($('autoEnh'));
-  renderAll(); renderGallery(); connect(); restoreRefs();
+  renderAll(); renderGallery(); connect(); restoreRefs().then(takeHandoff);
   for (const j of jobsGet()) trackImageJob(j);   // jobs still running from before a page switch / reload
   if (jobsGet().length) setStatus(`Picked up ${jobsGet().length} job${jobsGet().length > 1 ? 's' : ''} still running.`, 0.05);
 })();
